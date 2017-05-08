@@ -99,6 +99,10 @@ code {
   color: #333;
 }
 
+img {
+  max-width: 100%;
+}
+
 .article-title {
   font-size: 34px;
   color: #222;
