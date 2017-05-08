@@ -1,5 +1,6 @@
 ---
 title: Scrape a list of rental offers using rvest and purrr
+author: "Xavier Adam"
 date: "2017-03-31"
 categories: ["R"]
 tags: ["R","rmarkdown","DT","leaflet","rvest","xml2","purrr","dplyr","scraping"]
@@ -32,12 +33,13 @@ On the screenshot above, we can see that all the apartments are in a `div` with 
 ### Getting the page source into R
 
 Using the `rvest` library, we can grab the code of the site.
-
-```{r, cache=TRUE}
+```{r}
+# Load needed packages
 suppressMessages(library(dplyr))
 suppressMessages(library(xml2))
 suppressMessages(library(rvest))
-
+```
+```{r}
 # Create an html document
 listing_url <- "https://www.moservernet.ch/en/apartments-for-rent/"
 listing_html <- xml2::read_html(listing_url)
@@ -239,6 +241,6 @@ m
 
 ## Ressources
 
-- [](https://github.com/hadley/rvest)
-- [](https://stat4701.github.io/edav/2015/04/02/rvest_tutorial/)
+- [Homepage for rvest repo](https://github.com/hadley/rvest)
+- [Tutorial explaining rvest  basics](https://stat4701.github.io/edav/2015/04/02/rvest_tutorial/)
 
