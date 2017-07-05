@@ -1,0 +1,273 @@
+---
+title: "Clojure for pythonista - Manipulating strings"
+author: "Xavier Adam"
+date: "2017-06-13"
+categories: ["clojure", "python"]
+tags: ["clojure", "python"]
+---
+
+## Foreword
+I am trying to learn clojure. This series of posts is my attempt to solve beginner exercises both in python and clojure. Exercises are inspired by the excellent Reuven Lerner's [Practice Makes Python](https://practicemakespython.com/) and other sources like [Learn python the hard way](https://learnpythonthehardway.org/). Before trying any exercises, you can read an excellent introduction to clojure : [Brave Clojure](http://www.braveclojure.com/do-things/).
+
+## Introduction
+This exercise introduces ways to deal with strings.
+
+## Goal
+Create a command line script that asks the user to enter a word, sort the letters in alphabetic order and output the sentence "Your letters are: <word-in-alphabetic-order>". The idea is to play both with characters sequence and string interpolation.
+
+## Reordering letters
+### Reordering letters in python
+In python, strings are treated like sequences of characters, so you can iterate over them like you would do on a list. There is no character type and functions that "reclaim" character as argument (e.g `ord()`, which gives the unicode code point) are in fact asking for [strings of one character](https://docs.python.org/3/library/functions.html#ord).
+
+```{python, eval=FALSE}
+# python
+ord('bla')
+> TypeError: ord() expected a character, but string of length 3 found
+```
+
+```{python, eval=FALSE}
+# python
+ord('a')
+> 97
+ord('b')
+> 98
+```
+
+When using operators like greater-than or smaller-than on characters, the unicode code points are compared (so no need to use `ord()`).
+
+```{python, eval=FALSE}
+# python
+'a' < 'b'
+> True
+```
+
+Although strings are iterable like lists, they don't have all the list's functions. For example, you cannot use `.sort()` on a string. You would have to convert it to a list first with `list()`. Note that `.sort()` changes the list in place and return `None`.
+
+```{python, eval=FALSE}
+# python
+my_str = "bla"
+my_str.sort()
+> AttributeError: 'str' object has no attribute 'sort'
+
+my_str = list(my_str)
+my_str
+> ['b', 'l', 'a']
+my_str.sort()
+my_str
+> ['a', 'b', 'l']
+```
+
+To make things simpler, python has the `sorted` function, which work on any iterable, not just list. It also has the benefit of returning a new list rather than changing the list in-place.
+
+```{python, eval=FALSE}
+# python
+sorted("bla")
+> ['a', 'b', 'l']
+```
+
+For more info on the difference between `.sort()` and `sorted`, read this [SO thread](https://stackoverflow.com/questions/22442378/what-is-the-difference-between-sortedlist-vs-list-sort-python).
+
+Both `.sort()` and `sorted` return list of characters. To convert this list back to a normal string, we can use [`str.join(iterable)`](https://docs.python.org/3/library/stdtypes.html?highlight=join#str.join). Note that `str` here refers to the separator that will be placed between each element of the iterable.
+
+```{python, eval=FALSE}
+# python
+"".join(sorted("bla"))
+> 'abl'
+```
+
+### Reordering letters in clojure
+In clojure, there is a character type, which is different than the string type. Strings (even with only one character) are delimited by double quotes. Characters have a `\` prefix. 
+
+```{clojure, eval=FALSE}
+;; clojure
+(= "a" "a")
+> true
+
+(= \a \a)
+> true
+
+(= "a" \a)
+> false
+
+(type "a")
+> java.lang.String
+
+(type \a)
+> java.lang.Character
+```
+
+Operators like greater-than or smaller-than don't work on strings or characters.
+
+```{clojure, eval=FALSE}
+;; clojure
+(> \a "a")
+> java.lang.ClassCastException: 
+> java.lang.String cannot be cast to java.lang.Number
+
+(> "b" \a)
+> java.lang.ClassCastException: 
+> java.lang.Character cannot be cast to java.lang.Number
+```
+
+As the error message states, these operators need Number and neither strings nor character are automatically casted to Number. You need to use [`int`](https://clojuredocs.org/clojure.core/int) (like we did with `ord()` in python). This coerse numbers to integer but also characters to unicode points. It does not work on strings.
+
+```{clojure, eval=FALSE}
+;; clojure
+(int \a)
+> 97
+
+(int "a")
+> java.lang.ClassCastException: 
+> java.lang.String cannot be cast to java.lang.Character
+```
+
+Now we can compare characters, according to "alphabetical order" (at least unicode points).
+
+```{clojure, eval=FALSE}
+;; clojure
+(< (int \a) (int \c))
+> true
+```
+
+To convert a single-character string to a character, we would need new functions: 
+
+- [`seq`](https://clojuredocs.org/clojure.core/seq) takes a collection and return a seq. When used on strings, it returns a seq of the letters in the string, coerced to character.
+- [`first`](https://clojuredocs.org/clojure.core/first) returns the first item of a collection. It is useful in our case since seq will give us a single item collection, rather than just a character.
+
+```{clojure, eval=FALSE}
+;; clojure
+(seq "a")
+> (\a)
+(first (seq "a"))
+> \a
+(int (first (seq "a")))
+> 97
+```
+
+An alternative to `first` would be to use [`apply`](https://clojuredocs.org/clojure.core/apply), which lets you convert a collection to a list of arguments for a function. This is similar to unpacking argumets with [`*args` at function call in python](https://docs.python.org/3/tutorial/controlflow.html#unpacking-argument-lists).
+
+```{clojure, eval=FALSE}
+;; clojure
+(int (seq "a"))
+> java.lang.ClassCastException: 
+> clojure.lang.StringSeq cannot be cast to java.lang.Character
+
+(apply int (seq "a"))
+> 97
+```
+
+Fortunately, sorting the letters of a strings in alphabetical order don't require manual comparaison of each characters. The [`sort`](https://clojuredocs.org/clojure.core/sort) function does both the conversion to characters and the sorting.
+
+```{clojure, eval=FALSE}
+;; clojure
+(sort "hello")
+> (\e \h \l \l \o)
+```
+
+To join the characters back into a word, we can use `str`, which concatenate strings and/or characters. `str` expect arguments not a seq of characters, so we can use our `apply` function again.
+
+```{clojure, eval=FALSE}
+;; clojure
+;; intended use
+(str \e \h \l \l \o)
+> "ehllo"
+
+;; wrong
+(str (\e \h \l \l \o))
+> "(\\e \\h \\l \\l \\o)"
+
+;; workaround using apply
+(apply str (\e \h \l \l \o))
+> "ehllo"
+```
+
+An alternative to `str`, closer to python's `join` is [`clojure.string/join`](https://clojuredocs.org/clojure.string/join). It allows to choose a separator and expects an iterable as argument (no need for `apply`).
+
+```{clojure, eval=FALSE}
+;; clojure
+(clojure.string/join "" (sort "hello"))
+> "ehllo"
+(clojure.string/join "," (sort "hello"))
+> "e,h,l,l,o"
+```
+
+## String interpolation
+### String interpolation in python
+When starting out with python, it is tempting to use simple concatenate patterns to insert variable in strings.
+
+```{python, eval=FALSE}
+# python
+# Using +
+alpha_string = "".join(sorted("hello"))
+"Your reordered string is: " + alpha_string + "!")
+> "Your reordered string is: ehllo!"
+
+# Using join (poor choice, note that you get a space between ehllo and !)
+" ".join(["Your reordered string is:", alpha_string, "!"])
+> "Your reordered string is: ehllo !"
+```
+
+But you can get much nicer syntax and options using string interpolation. For example, the two examples above would fail if `alpha_string` was a number. They would not do an implicit conversion to string, like the methods below.
+
+Python 3.6 supports 3 types of interpolation: `%`, `.format` and `literal string f`. These are [well](https://zerokspot.com/weblog/2015/12/31/new-string-formatting-in-python/) [covered](https://blog.lerner.co.il/teaching-old-dog-new-tricks-learned-love-str-format-gave/) [online](https://www.python.org/dev/peps/pep-0498/). 
+
+For simple variable `literal f strings` are definitely more readable:
+
+```{python, eval=FALSE}
+# python
+alpha_string = "".join(sorted("hello"))
+# Using .format
+"Your reordered string is: {}!".format(alpha_string)
+> "Your reordered string is: ehllo!"
+
+# Using f (>= 3.6)
+f"Your reordered string is: {alpha_string}!"
+> "Your reordered string is: ehllo!"
+```
+
+For dictionary, it is more a matter of taste, thanks to dictionary unpacking:
+
+```{python, eval=FALSE}
+# python
+user = {'name': 'Jane', 'city': 'Geneva'}
+# Using .format
+"{name} lives in {city}".format(**user)
+> "Jane lives in Geneva"
+
+# Using f (>= 3.6)
+f"{user['name']} lives in {user['city']}"
+> "Jane lives in Geneva"
+```
+
+### String interpolation in clojure
+Similar to `+`/`join` in python, you can do basic, not very practical, insertion of variables with `str`/`clojure.string/join` with clojure. Unlike python, both methods will convert number to string for you.
+
+```{clojure, eval=FALSE}
+;; clojure
+(def alphastring (apply str (sort "hello")))
+
+;; Using str
+(str "Your reordered string is: " alphastring "!")
+> "Your reordered string is: ehllo!"
+
+;; Using join (poor choice, note that you get a space between alphastring and "!")
+(clojure.string/join " " ["Your reordered string is:" alphastring "!"])
+> "Your reordered string is: ehllo !"
+```
+
+Interpolation can be done with [`format`](https://clojuredocs.org/clojure.core/format), a pattern similar to `%-formatting` in python. The list of `%-characters` [can be found here](https://dzone.com/articles/java-string-format-examples).
+
+```{clojure, eval=FALSE}
+;; clojure
+(def name "Jane")
+(def city "Geneva")
+(def age 33)
+(format "%s lives in %s and is %d!" name city age)
+> "Jane lives in Geneva and is 33!"
+```
+
+Clojure string interpolation options are well explained in [this article](https://dzone.com/articles/java-string-format-examples), including a benchmark of their speed. The article ends up showcasing `core.incubator`'s `<<` macro which even lets you do string interpolation in a similar way to ruby or python's `f`.
+
+
+
+

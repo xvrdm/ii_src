@@ -1,0 +1,156 @@
+---
+title: "Clojure for pythonista - User Input/Loop/Conditional"
+author: "Xavier Adam"
+date: "2017-06-08"
+categories: ["clojure", "python"]
+tags: ["clojure","python"]
+---
+
+## Foreword
+I am trying to learn clojure. This series of posts is my attempt to solve beginner exercises both in python and clojure. Exercises are inspired by the excellent Reuven Lerner's [Practice Makes Python](https://practicemakespython.com/) and other sources like [Learn python the hard way](https://learnpythonthehardway.org/). Before trying any exercises, you can read an excellent introduction to clojure : [Brave Clojure](http://www.braveclojure.com/do-things/).
+
+## Introduction
+This exercise introduces the following concepts: user-input, conditional and loop.
+
+## Goal
+Create a command line game where the user has to guess a number between 0 and 99. The final program should repeat the question until the user find the right number, providing a helpful "Higher!" or "Lower!" hint after each failed attempt.
+
+## Getting random numbers
+### Getting random numbers in python
+In python, random integers can be obtained from `randint`, a function from the `random` package.
+
+```{python, eval=FALSE}
+# python
+import random
+# Get a random number between 0 and 99
+number = random.randint(0, 100)
+```
+
+### Getting random numbers in clojure
+In clojure, you get random integer from the `rand-int` function (which by default start at 0 and end at the first argument)
+
+```{clojure, eval=FALSE}
+;; clojure
+(def -main []
+  (rand-int 100))
+```
+
+## Getting user input
+### Getting user input in python
+In python, you can get user input with the `input` function. `input` takes a string as an argument that you can use to display a prompt to the user. To make sure that the input is converted to a integer, we wrap the `input` call in `int`.
+
+```{python, eval=FALSE}
+# python
+guess = int(input("Enter a guess: "))
+```
+
+### Getting user input in clojure
+In clojure, you can get user input with the [`read-line`](https://clojuredocs.org/clojure.core/read-line) function. The conversion to an integer is also necessary and you can use `Integer/parseInt` for that. `read-line` doesn't have prompt feature, so we will print the prompt to the console with [`println`](https://clojuredocs.org/clojure.core/read-line).
+
+```{clojure, eval=FALSE}
+;; clojure
+(defn -main []
+  (println "Enter a guess:")
+  (let [guess (Integer/parseInt (read-line))]))
+```
+
+## Conditionals
+### Conditionals in python
+Now that we have a random number and a number entered by the user, we need to compare them and send the response response.
+
+```{python, eval=FALSE}
+# python
+import random
+number = random.randint(0, 100)
+guess = int(input("Enter a guess: "))
+
+if number > guess:
+    print("Too small!")
+elif number < guess:
+    print("Too big!")
+else:
+    print("Correct!")
+```
+
+### Conditionals in clojure
+In clojure, the [`if`](http://www.braveclojure.com/do-things/#if) function seems to be designed for single comparison. It works as a simple "if/else": `(if <test> <do-if-true> <do-if-false>)`. There is no such thing as `elif`. However, clojure has [`cond`](https://clojuredocs.org/clojure.core/cond) function, which allow for as many comparison as we like. The keyword `:else` is just the last comparison and evaluate to `true`, if no other comparison have been `true` before it. We could have chosen any other truthy value (e.g `:otherwise` or `1`).
+
+```{clojure, eval=FALSE}
+;; clojure
+(defn -main []
+  (let [number (rand-int 100)]
+    (println "Enter a guess:")
+    (let [guess (Integer/parseInt (read-line))]
+      (cond (> number guess)
+              (println "Too Low!")
+            (< number guess)
+              (println "Too Big!")
+            :else
+              (println "Yeah!")))))
+```
+
+## Loop to repeat the question
+### Loop to repeat the question in python
+Lastly, we need to make the program able to repeat the question when the answer is wrong.
+
+In python, never-ending loop are often implemented with `while True`, using the `break` keyword to exit on specific conditions.
+
+```{python, eval=FALSE}
+# python
+import random
+number = random.randint(0, 100)
+
+while True:
+    guess = int(input("Enter a guess: "))
+    if number > guess:
+        print("Too small!")
+    elif number < guess:
+        print("Too big!")
+    else:
+        print("Correct!")
+        break
+```
+
+### Loop to repeat the question in clojure
+In clojure, you can take the opposite approach. Rather than saying "when to exit" (`break`), we can use the [`loop`](http://www.braveclojure.com/do-things/#loop) function and tell it "when to loop" (`recur`):
+
+```{clojure, eval=FALSE}
+;; clojure
+(defn -main []
+  (let [number (rand-int 100)]
+    (loop []
+      (println "Enter a guess:")
+      (let [guess (Integer/parseInt (read-line))]
+        (cond (> number guess)
+                (do (println "Too Low!")
+                    (recur))
+              (< number guess)
+                (do (println "Too Big!")
+                    (recur))
+              :else
+                (println "Yeah!"))))))
+```
+
+Note that we had to wrap the "actions" following each `cond`'s conditions with the [`do`](http://www.braveclojure.com/do-things/#do) function, a simple way to group multiple statements into one. Otherwise, the first call to `(recur)` (after "Too Low!") would be interpreted as the second condition for `cond` (instead of `(< number guess)`).
+
+Alternatively, you could use a recursive function. I haven't been able to find if for such a short problem one method is better than the other, but this is a good illustration of a program with two functions.
+
+```{clojure, eval=FALSE}
+;; clojure
+(defn try-and-guess [number]
+  (println "Enter your guess:")
+  (let [guess (Integer/parseInt (read-line))]
+    (cond
+      (< guess number) 
+        (do (println "Guess is too small...")
+            (try-and-guess number))
+      (> guess number)
+        (do (println "Guess is too big...")
+            (try-and-guess number))
+      :else
+      (println "Yeah!"))))
+
+(defn -main []
+  (let [number (rand-int 100)]
+    (try-and-guess number)))
+```

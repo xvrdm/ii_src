@@ -1,0 +1,210 @@
+---
+title: "Create Swiss cantons cartogram with ggplot2"
+author: "Xavier Adam"
+date: "2017-05-08"
+categories: ["R"]
+tags: ["R","R Markdown","rvest","xml2","purrr","dplyr","scraping"]
+---    
+
+<script src="/rmarkdown-libs/htmlwidgets/htmlwidgets.js"></script>
+<script src="/rmarkdown-libs/jquery/jquery.min.js"></script>
+<script src="/rmarkdown-libs/datatables-binding/datatables.js"></script>
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/dt-core/js/jquery.dataTables.min.js"></script>
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>While reading <a href="www.rweekly.org">rweekly</a> past issues, I stumbbled upon a post from <a href="http://maxhumber.com/2017/02/15/tile_canada.html">Max Humber</a>, explaining how he tried to design a tile grid map / state cartogram for Canada. I had never seen such design and thought that it would be a great fit for Swiss cantons. While browsing the excellent repositories of <a href="https://github.com/hrbrmstr">Bob Rudis</a>, I realised that he had written <a href="https://github.com/hrbrmstr/statebins">statebin</a>, a ggplot extension to easily create US state cartogram. This post is my attempt to convert his code to handle Swiss cantons.</p>
+<p>In hrbrmstr library, US states are on a 8x12 grid.</p>
+<div class="figure">
+<img src="/img/1705081-cantonbins-scrsh-hrbrmstr-statesbin.png" alt="US States mapped with statebins. Source: https://github.com/hrbrmstr/statebins" />
+<p class="caption">US States mapped with statebins. Source: <a href="https://github.com/hrbrmstr/statebins" class="uri">https://github.com/hrbrmstr/statebins</a></p>
+</div>
+<p>These coordinates are saved with the full and abbreviated names in a dataframe. The <code>L</code> suffix after the numbers is a <a href="http://stackoverflow.com/questions/24350733/why-would-r-use-the-l-suffix-to-denote-an-integer">way to specify integer</a>.</p>
+<pre class="r"><code># Original code from hrbrmstr
+# source: https://github.com/hrbrmstr/statebins/blob/master/R/statebins.R
+state_coords &lt;- structure(
+  list(abbrev = c(&quot;AL&quot;, &quot;AK&quot;, &quot;AZ&quot;, &quot;AR&quot;, &quot;CA&quot;, &quot;CO&quot;,
+                  &quot;CT&quot;, &quot;DC&quot;, &quot;DE&quot;, &quot;FL&quot;, &quot;GA&quot;, &quot;HI&quot;,
+                  &quot;ID&quot;, &quot;IL&quot;, &quot;IN&quot;, &quot;IA&quot;, &quot;KS&quot;, &quot;KY&quot;, 
+                  &quot;LA&quot;, &quot;ME&quot;, &quot;MD&quot;, &quot;MA&quot;, &quot;MI&quot;, &quot;MN&quot;,
+                  &quot;MS&quot;, &quot;MO&quot;, &quot;MT&quot;, &quot;NE&quot;, &quot;NV&quot;, &quot;NH&quot;, 
+                  &quot;NJ&quot;, &quot;NM&quot;, &quot;NY&quot;, &quot;NC&quot;, &quot;ND&quot;, &quot;OH&quot;, 
+                  &quot;OK&quot;, &quot;OR&quot;, &quot;PA&quot;, &quot;RI&quot;, &quot;SC&quot;, &quot;SD&quot;, 
+                  &quot;TN&quot;, &quot;TX&quot;, &quot;UT&quot;, &quot;VT&quot;, &quot;VA&quot;, &quot;WA&quot;, 
+                  &quot;WV&quot;, &quot;WI&quot;, &quot;WY&quot;, &quot;PR&quot;),
+       it = c(&quot;Alabama&quot;, &quot;Alaska&quot;, &quot;Arizona&quot;, &quot;Arkansas&quot;,
+              &quot;California&quot;, &quot;Colorado&quot;, &quot;Connecticut&quot;, 
+              &quot;District of Columbia&quot;, &quot;Delaware&quot;, &quot;Florida&quot;, 
+              &quot;Georgia&quot;, &quot;Hawaii&quot;, &quot;Idaho&quot;, &quot;Illinois&quot;, 
+              &quot;Indiana&quot;, &quot;Iowa&quot;, &quot;Kansas&quot;, &quot;Kentucky&quot;, 
+              &quot;Louisiana&quot;, &quot;Maine&quot;, &quot;Maryland&quot;, 
+              &quot;Massachusetts&quot;, &quot;Michigan&quot;, &quot;Minnesota&quot;, 
+              &quot;Mississippi&quot;, &quot;Missouri&quot;, &quot;Montana&quot;, 
+              &quot;Nebraska&quot;, &quot;Nevada&quot;, &quot;New Hampshire&quot;,
+              &quot;New Jersey&quot;, &quot;New Mexico&quot;, &quot;New York&quot;,
+              &quot;North Carolina&quot;, &quot;North Dakota&quot;, &quot;Ohio&quot;,
+              &quot;Oklahoma&quot;, &quot;Oregon&quot;, &quot;Pennsylvania&quot;,
+              &quot;Rhode Island&quot;, &quot;South Carolina&quot;,
+              &quot;South Dakota&quot;, &quot;Tennessee&quot;, &quot;Texas&quot;, &quot;Utah&quot;,
+              &quot;Vermont&quot;, &quot;Virginia&quot;, &quot;Washington&quot;,
+              &quot;West Virginia&quot;, &quot;Wisconsin&quot;, &quot;Wyoming&quot;,
+              &quot;Puerto Rico&quot;),
+       col = c(8L, 1L, 3L, 6L, 2L, 4L, 11L, 10L, 11L, 10L,
+               9L, 1L, 3L, 7L, 7L, 6L, 5L, 7L, 6L, 12L,
+               10L, 11L, 8L, 6L, 7L, 6L, 4L, 5L, 3L, 12L,
+               10L, 4L, 10L, 8L, 5L, 8L, 5L, 2L, 9L, 12L,
+               9L, 5L, 7L, 5L, 3L, 11L, 9L, 2L, 8L, 7L, 4L, 12L),
+       row = c(7L, 7L, 6L, 6L, 5L, 5L, 4L, 6L, 5L, 8L, 7L,
+               8L, 3L, 3L, 4L, 4L, 6L, 5L, 7L, 1L, 5L, 3L,
+               3L, 3L, 7L, 5L, 3L, 5L, 4L, 2L, 4L, 6L, 3L, 
+               6L, 3L, 4L, 7L, 4L, 4L, 4L, 6L, 4L, 6L, 8L,
+               5L, 2L, 5L, 3L, 5L, 2L, 4L, 8L)),
+  .Names = c(&quot;abbrev&quot;, &quot;state&quot;, &quot;col&quot;, &quot;row&quot;),
+  class = &quot;data.frame&quot;, 
+  row.names = c(NA, -52L)
+)</code></pre>
+<p>To sketch the mockup of your tile grid, excel can come to rescue.</p>
+<div class="figure">
+<img src="/img/1705081-cantonbins-scrsh-excel.png" alt="Mock up of Swiss tile grid" />
+<p class="caption">Mock up of Swiss tile grid</p>
+</div>
+<p>This shows that cantons could be represented on a 5x9 grid.</p>
+<div class="figure">
+<img src="/img/1705081-cantonbins-scrsh-excel-2.png" alt="Columns/Rows reference for 5x9 grid" />
+<p class="caption">Columns/Rows reference for 5x9 grid</p>
+</div>
+<p>By using the row/column reference of each canton, we can translate this mock up into an object mimicing hrbrmstr data structure (adding the names in each national languages).</p>
+<pre class="r"><code>canton_coords &lt;- structure(
+  list(abbrev = c(&quot;AG&quot;, &quot;AI&quot;, &quot;AR&quot;, &quot;BE&quot;, &quot;BL&quot;, &quot;BS&quot;, &quot;FR&quot;,
+                  &quot;GE&quot;, &quot;GL&quot;, &quot;GR&quot;, &quot;JU&quot;, &quot;LU&quot;, &quot;NE&quot;, &quot;NW&quot;,
+                  &quot;OW&quot;, &quot;SG&quot;, &quot;SH&quot;, &quot;SO&quot;, &quot;SZ&quot;, &quot;TG&quot;, &quot;TI&quot;,
+                  &quot;UR&quot;, &quot;VD&quot;, &quot;VS&quot;, &quot;ZG&quot;, &quot;ZH&quot;),
+       fr_name = c(&quot;Argovie&quot;, &quot;Appenzell Rhodes-Intérieures&quot;,
+                   &quot;Appenzell Rhodes-Extérieures&quot;, &quot;Berne&quot;,
+                   &quot;Bâle-Campagne&quot;, &quot;Bâle-Ville&quot;, &quot;Fribourg&quot;,
+                   &quot;Genève&quot;, &quot;Glaris&quot;, &quot;Grisons&quot;, &quot;Jura&quot;,
+                   &quot;Lucerne&quot;, &quot;Neuchâtel&quot;, &quot;Nidwald&quot;, &quot;Obwald&quot;,
+                   &quot;Saint-Gall&quot;, &quot;Schaffhouse&quot;, &quot;Soleure&quot;, &quot;Schwytz&quot;,
+                   &quot;Thurgovie&quot;, &quot;Tessin&quot;, &quot;Uri&quot;, &quot;Vaud&quot;,
+                   &quot;Valais&quot;, &quot;Zoug&quot;, &quot;Zurich&quot;),
+       de_name = c(&quot;Aargau&quot;, &quot;Appenzell Innerrhoden&quot;,
+                   &quot;Appenzell Ausserrhoden&quot;, &quot;Bern&quot;, 
+                   &quot;Basel-Landschaft&quot;, &quot;Basel-Stadt&quot;,
+                   &quot;Freiburg&quot;, &quot;Genf&quot;, &quot;Glarus&quot;,
+                   &quot;Graubünden&quot;, &quot;Jura&quot;, &quot;Luzern&quot;,
+                   &quot;Neuenburg&quot;, &quot;Nidwalden&quot;, &quot;Obwalden&quot;,
+                   &quot;St. Gallen&quot;, &quot;Schaffhausen&quot;, &quot;Solothurn&quot;,
+                   &quot;Schwyz&quot;, &quot;Thurgau&quot;, &quot;Tessin&quot;, &quot;Uri&quot;,
+                   &quot;Waadt&quot;, &quot;Wallis&quot;, &quot;Zug&quot;, &quot;Zürich&quot;),
+       it_name = c(&quot;Argovia&quot;, &quot;Appenzello Interno&quot;,
+                   &quot;Appenzello Esterno&quot;, &quot;Berna&quot;,
+                   &quot;Basilea Campagna&quot;, &quot;Basilea Città&quot;,
+                   &quot;Friburgo&quot;, &quot;Ginevra&quot;, &quot;Glarona&quot;,
+                   &quot;Grigioni&quot;, &quot;Giura&quot;, &quot;Lucerna&quot;, &quot;Neuchâtel&quot;,
+                   &quot;Nidvaldo&quot;, &quot;Obvaldo&quot;, &quot;San Gallo&quot;,
+                   &quot;Sciaffusa&quot;, &quot;Soletta&quot;, &quot;Svitto&quot;, &quot;Turgovia&quot;,
+                   &quot;Ticino&quot;, &quot;Uri&quot;, &quot;Vaud&quot;, &quot;Vallese&quot;,
+                   &quot;Zugo&quot;, &quot;Zurigo&quot;), 
+       ru_name = c(&quot;Argovia&quot;, &quot;Appenzell Dadens&quot;,
+                   &quot;Appenzell Dadora&quot;, &quot;Berna&quot;,
+                   &quot;Basilea-Champagna&quot;, &quot;Basilea-Citad&quot;,
+                   &quot;Friburg&quot;, &quot;Genevra&quot;, &quot;Glaruna&quot;,
+                   &quot;Grischun&quot;, &quot;Giura&quot;, &quot;Lucerna&quot;, &quot;Neuchâtel&quot;,
+                   &quot;Sutsilvania&quot;, &quot;Sursilvania&quot;, &quot;Son Gagl&quot;,
+                   &quot;Schaffusa&quot;, &quot;Soloturn&quot;, &quot;Sviz&quot;, &quot;Turgovia&quot;,
+                   &quot;Tessin&quot;, &quot;Uri&quot;, &quot;Vad&quot;, &quot;Vallais&quot;,
+                   &quot;Zug&quot;, &quot;Turitg&quot;),
+       col = c(5L,8L,8L,4L,4L,4L,3L,1L,8L,9L,3L,5L,3L,
+               6L,5L,7L,6L,4L,7L,7L,7L,7L,2L,4L,6L,6L),
+       row = c(2L,3L,2L,4L,2L,1L,4L,5L,4L,4L,2L,3L,3L,
+               4L,4L,2L,1L,3L,3L,1L,5L,4L,4L,5L,3L,2L)),
+  .Names = c(&quot;abbrev&quot;, &quot;fr_name&quot;, &quot;de_name&quot;,
+             &quot;it_name&quot;, &quot;ru_name&quot;, &quot;col&quot;, &quot;row&quot;),
+  class = &quot;data.frame&quot;,
+  row.names = c(NA, -26L)
+)</code></pre>
+<p>Using the same data structure as the one designed for <a href="https://github.com/hrbrmstr/statebins">statebin</a>, it is easy to reuse the same ggplot code and only apply slight modifications (like a theme from the same <a href="https://github.com/hrbrmstr/hrbrthemes">hrbrmstr</a>).</p>
+<pre class="r"><code>suppressMessages(library(ggplot2))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(hrbrthemes))
+
+cantonbins &lt;- function(canton_data, canton_col=&quot;abbrev&quot;, value_col=&quot;value&quot;,
+                     text_color=&quot;black&quot;, font_size=3,
+                     canton_border_col=&quot;white&quot;, labels=1:5,
+                     brewer_pal=&quot;PuBu&quot;, plot_title=&quot;&quot;,
+                     plot_subtitle=&quot;&quot;, plot_caption=&quot;&quot;) {
+
+  # Reformat canton_data into a data frame without factors
+  # and merge with canton_coords on abbrev key
+  canton_data &lt;- data.frame(canton_data, stringsAsFactors=FALSE)
+  merge.x &lt;- &quot;abbrev&quot;
+  ct.dat &lt;- merge(canton_coords, canton_data,
+                  by.x=merge.x, by.y=canton_col, all.y=TRUE)
+
+  # Create tile plot
+  gg &lt;- ggplot(ct.dat, aes_string(x=&quot;col&quot;, y=&quot;row&quot;, label=&quot;abbrev&quot;))
+  gg &lt;- gg + geom_tile(aes_string(fill=value_col))
+  gg &lt;- gg + geom_tile(color=canton_border_col, aes_string(fill=value_col),
+                       size=2, show.legend =FALSE)
+  gg &lt;- gg + geom_text(color=text_color, size=font_size)
+  
+  # Add title
+  gg &lt;- gg + labs(title=plot_title, subtitle=plot_subtitle,
+                  caption=plot_caption)
+  
+  # Set scales and coordinates system
+  gg &lt;- gg + scale_y_reverse()
+  gg &lt;- gg + scale_fill_gradientn(colours = brewer.pal(6, brewer_pal))
+  gg &lt;- gg + coord_equal()
+  
+  # Set minimal theme and remove axis titles, border, grid, 
+  # background, axis ticks and axis text
+  gg &lt;- gg + theme_ipsum_rc()
+  gg &lt;- gg + labs(x=NULL, y=NULL)
+  gg &lt;- gg + theme(panel.border=element_blank())
+  gg &lt;- gg + theme(panel.grid=element_blank())
+  gg &lt;- gg + theme(panel.background=element_blank())
+  gg &lt;- gg + theme(axis.ticks=element_blank())
+  gg &lt;- gg + theme(axis.text=element_blank())
+
+  return(gg)
+}</code></pre>
+<p>To test the function, let’s scrape a table from wikipedia containing the population per cantons. By inspecting the wikipedia code, you can see that the table has the <code>class</code>: <code>wikitable</code>. It can be extracted (with the help of <code>rvest</code>) and converted into a usable dataframe (using <code>dplyr</code>). The only modification are:</p>
+<ul>
+<li>renaming the <code>Population[Note 2]</code> column to something simpler</li>
+<li>converting the numbers stored as strings to numeric after removing their thousands “,”</li>
+<li>remove the total row for Switzerland (<code>Code != &quot;CH&quot;</code>)</li>
+<li>selecting the columns of interest</li>
+</ul>
+<pre class="r"><code>suppressMessages(library(rvest))
+suppressMessages(library(dplyr))
+suppressMessages(library(stringr))
+suppressMessages(library(DT))
+
+url &lt;- &quot;https://en.wikipedia.org/wiki/Cantons_of_Switzerland&quot;
+density &lt;- url %&gt;%
+  read_html() %&gt;%
+  html_node(xpath=&#39;//table[contains(@class,&quot;wikitable&quot;)]&#39;) %&gt;%
+  html_table() %&gt;%
+  rename(Population=`Population[Note 2]`) %&gt;%
+  mutate(Population=as.numeric(stringr::str_replace_all(Population, &quot;,&quot;, &quot;&quot;))) %&gt;%
+  filter(Code != &quot;CH&quot;) %&gt;%
+  select(Code, Canton, Population)
+
+DT::datatable(
+  density,
+  options = list(pageLength = 5, dom = &#39;tpi&#39;),
+  rownames = FALSE,
+  caption = &quot;Table 1 : Subset of wikipedia data for cantons.&quot;)</code></pre>
+<div id="htmlwidget-1" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"filter":"none","caption":"<caption>Table 1 : Subset of wikipedia data for cantons.<\/caption>","data":[["ZH","BE","LU","UR","SZ","OW","NW","GL","ZG","FR","SO","BS","BL","SH","AR","AI","SG","GR","AG","TG","TI","VD","VS","NE","GE","JU"],["Zürich","Bern","Luzern","Uri","Schwyz","Obwalden","Nidwalden","Glarus","Zug","Fribourg","Solothurn","Basel-Stadt","Basel-Landschaft","Schaffhausen","Appenzell Ausserrhoden","Appenzell Innerrhoden","St. Gallen","Graubünden","Aargau","Thurgau","Ticino","Vaud","Valais","Neuchâtel","Geneva","Jura"],[1463459,1017483,398762,35973,154093,37076,42420,40028,122134,307461,266418,198290,285094,79836,54543,15974,499065,196610,653675,267429,351946,773407,335696,178107,484736,72782]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Code<\/th>\n      <th>Canton<\/th>\n      <th>Population<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"dom":"tpi","columnDefs":[{"className":"dt-right","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<p>We can now try the <code>cantonbins</code> function.</p>
+<pre class="r"><code>cantonbins(density, canton_col=&quot;Code&quot;, value_col=&quot;Population&quot;,
+           plot_title=&quot;Population size in Swiss Cantons&quot;,
+           plot_subtitle = paste0(&quot;Source: &quot;, url))</code></pre>
+<p><img src="/post/1705081-cantonbins_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<p>There is a lot more we can do with Cartograms and, in a future post, I hope to release a full fork of <a href="https://github.com/hrbrmstr/statebins">statebin</a> so that you can easily install it from Github.</p>
+</div>

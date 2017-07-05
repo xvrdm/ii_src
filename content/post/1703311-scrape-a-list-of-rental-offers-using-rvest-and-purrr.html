@@ -1,0 +1,253 @@
+---
+title: Scrape a list of rental offers using rvest and purrr
+author: "Xavier Adam"
+date: "2017-03-31"
+categories: ["R"]
+tags: ["R","rmarkdown","DT","leaflet","rvest","xml2","purrr","dplyr","scraping"]
+---
+
+<script src="/rmarkdown-libs/htmlwidgets/htmlwidgets.js"></script>
+<script src="/rmarkdown-libs/jquery/jquery.min.js"></script>
+<script src="/rmarkdown-libs/datatables-binding/datatables.js"></script>
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/dt-core/js/jquery.dataTables.min.js"></script>
+<link href="/rmarkdown-libs/leaflet/leaflet.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/leaflet/leaflet.js"></script>
+<link href="/rmarkdown-libs/leafletfix/leafletfix.css" rel="stylesheet" />
+<link href="/rmarkdown-libs/leaflet-label/leaflet.label.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/leaflet-label/leaflet.label.js"></script>
+<script src="/rmarkdown-libs/Proj4Leaflet/proj4-compressed.js"></script>
+<script src="/rmarkdown-libs/Proj4Leaflet/proj4leaflet.js"></script>
+<script src="/rmarkdown-libs/leaflet-binding/leaflet.js"></script>
+<script src="/rmarkdown-libs/leaflet-providers/leaflet-providers.js"></script>
+<script src="/rmarkdown-libs/leaflet-providers-plugin/leaflet-providers-plugin.js"></script>
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>The offers on real estate websites aren’t always in an easy-to-use format, especially if you want to compare offers from multiple agencies.</p>
+<p>In this post, we will see how to use R to scrape the details about the apartments listed on a single page on a real estate website.</p>
+</div>
+<div id="scraping-the-data" class="section level2">
+<h2>Scraping the data</h2>
+<div id="getting-to-know-the-site" class="section level3">
+<h3>Getting to know the site</h3>
+<p>We start by looking at the real estate agent website. The section containing apartment rental offers can be found at this <a href="https://www.moservernet.ch/en/apartments-for-rent/">URL</a>.</p>
+<div class="figure">
+<img src="/img/1703311-scrsh-website-msrvrn.png" alt="Apartment Rental section on website" />
+<p class="caption">Apartment Rental section on website</p>
+</div>
+<p>Each flat seem to be displayed in its own little box, which should derive from code not to hard to parse. But it would be even easier if the data was grabed from some kind of API.</p>
+<p>Looking at the network tab of the inspector, it doesn’t look like we can easily identify an API.</p>
+<div class="figure">
+<img src="/img/1703311-scrsh-network-msrvrn.png" alt="Network tab from inspector tool on Apartment Rental section website" />
+<p class="caption">Network tab from inspector tool on Apartment Rental section website</p>
+</div>
+<p>We will need to fall back on scraping.</p>
+<p>Looking at the page source, we can see that all the information seem to be present so we won’t need to rely on a headless browser to execute Javascript. The data seems neatly organised.</p>
+<p><img src="/img/1703311-scrsh-source-msrvrn.png" alt="Source code from Apartment Rental section on website" /> On the screenshot above, we can see that all the apartments are in a <code>div</code> with the <code>id=offers</code> (blue rectangle). Then each apartment is contained in its own <code>div</code> with the <code>class=offer</code> (red rectangles). We can also see that the different attributes of each flat are in separated <code>div</code> or <code>h</code> tags, usually with meaningful <code>class</code> like <code>price-offer</code>, <code>charge-offer</code>, <code>size-offer</code>… Very conveniently, and probably because they have a google map applet, the latitude and longitude are already available with the classes <code>info-obj-address-lat</code> and <code>info-obj-address-lng</code>.</p>
+</div>
+<div id="getting-the-page-source-into-r" class="section level3">
+<h3>Getting the page source into R</h3>
+<p>Using the <code>rvest</code> library, we can grab the code of the site.</p>
+<pre class="r"><code># Load needed packages
+suppressMessages(library(dplyr))
+suppressMessages(library(xml2))
+suppressMessages(library(rvest))</code></pre>
+<pre class="r"><code># Create an html document
+listing_url &lt;- &quot;https://www.moservernet.ch/en/apartments-for-rent/&quot;
+listing_html &lt;- xml2::read_html(listing_url)
+listing_html</code></pre>
+<pre><code>## {xml_document}
+## &lt;html&gt;
+## [1] &lt;head&gt;\n&lt;meta http-equiv=&quot;Content-Type&quot; content=&quot;text/html;charset=u ...
+## [2] &lt;body&gt;\n\t\t&lt;div id=&quot;main&quot;&gt;\t\n\t\t\t&lt;div class=&quot;container&quot; style=&quot;h ...</code></pre>
+</div>
+<div id="isolate-the-html-for-the-offers" class="section level3">
+<h3>Isolate the html for the offers</h3>
+<p>Then we isolate the nodes with <code>class=offer</code> contained in the <code>div</code> with <code>id=offers</code>.</p>
+<pre class="r"><code>listing_offers &lt;- listing_html %&gt;%
+  rvest::html_nodes(&quot;#offers .offer&quot;)
+head(listing_offers)</code></pre>
+<pre><code>## {xml_nodeset (6)}
+## [1] &lt;div class=&quot;offer cat2 cat3 1&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-f ...
+## [2] &lt;div class=&quot;offer cat2 2&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-for-re ...
+## [3] &lt;div class=&quot;offer cat3 cat4 2&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-f ...
+## [4] &lt;div class=&quot;offer cat3 2&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-for-re ...
+## [5] &lt;div class=&quot;offer cat1 cat2 2&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-f ...
+## [6] &lt;div class=&quot;offer cat2 cat3 3&quot;&gt;\n\t\t\t\t\t&lt;a href=&quot;/en/apartments-f ...</code></pre>
+</div>
+<div id="parsing-the-offers" class="section level3">
+<h3>Parsing the offers</h3>
+<p>Now that we have a list of offers, we need to find a way to extract the data of interest from each offer and store it in a usable format. There are at least two way to proceed: a “field centric” way and an “offer centric” way.</p>
+<div id="parsing-with-the-field-centric-way" class="section level4">
+<h4>Parsing with the “field centric” way</h4>
+<p>In the “field centric” way, we grab one field of interest (<code>rent</code>, <code>rooms</code>, <code>address</code>…) at a time for all the offers. We end up with vectors containing the value of the field for each offer. These vector can then be combined into a dataframe. The “field centric” way is described in the lego movie example on <a href="http://web.archive.org/web/20160113072819/https://github.com/hadley/rvest"><code>rvest</code>’s github repo</a></p>
+<p><code>id</code> and <code>address</code> can be stored as text and only need a bit of cleanup.</p>
+<pre class="r"><code>id &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.ref&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  stringr::str_replace(&quot;Ref. &quot;,&quot;&quot;)
+
+address &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.location-offer&quot;) %&gt;%
+  rvest::html_text()</code></pre>
+<p><code>rooms</code>, <code>latitude</code>, <code>longitude</code>, <code>rent</code> and <code>charges</code> are better saved as numeric after removal of prefix/suffix like currencies. Note that <code>stringr</code>’s <code>str_replace</code> can search for regular expressions pattern, which let us do things like removing <code>room</code> and <code>rooms</code> in one call.</p>
+<pre class="r"><code>rooms &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.ref-offer&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  stringr::str_replace(&quot; room[s]*&quot;,&quot;&quot;) %&gt;%
+  as.numeric()
+
+latitude &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.infos-objet-address-lat&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  as.numeric()
+
+longitude &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.infos-objet-address-lng&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  as.numeric()
+
+rent &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.price-offer&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  stringr::str_replace(&quot;CHF &quot;,&quot;&quot;) %&gt;%
+  stringr::str_replace_all(&quot;[.]&quot;,&quot;&quot;) %&gt;%
+  stringr::str_replace(&quot;[-]&quot;,&quot;&quot;) %&gt;%
+  as.numeric()
+
+charges &lt;- listing_offers %&gt;%
+  rvest::html_nodes(&quot;.charge-offer&quot;) %&gt;%
+  rvest::html_text() %&gt;%
+  stringr::str_replace(&quot;Charges: CHF &quot;,&quot;&quot;) %&gt;%
+  stringr::str_replace_all(&quot;[.]&quot;,&quot;&quot;) %&gt;%
+  stringr::str_replace(&quot;[-]&quot;,&quot;&quot;) %&gt;%
+  as.numeric()</code></pre>
+<p>All these vectors can then be combined in a dataframe, which is nicely displayed in an interactive datatable.</p>
+<pre class="r"><code>offers &lt;- data.frame(id, 
+                     rooms, 
+                     address, 
+                     latitude, 
+                     longitude, 
+                     rent, 
+                     charges)
+
+library(DT)
+DT::datatable(
+  offers,
+  options = list(pageLength = 5, dom = &#39;tpi&#39;),
+  rownames = FALSE,
+  caption = &quot;Table 1 : Offers scraped using the field centric way&quot;)</code></pre>
+<div id="htmlwidget-1" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"filter":"none","caption":"<caption>Table 1 : Offers scraped using the field centric way<\/caption>","data":[["0033.41.0030","2040.41.0020","2066.41.0010","0510.45.0030","2457.41.0020","2018.48.0020","2020.47.0020","2190.44.0030","0577.43.0340","0090.45.0040","0108.43.0020","0022.42.0010","0033.45.0020","0138.40.0020","0690.41.0020","2062.43.0050","0571.43.0040","0022.40.0010","0022.43.0010","0082.44.0030","0569.42.0210","2581.43.0010","0695.42.0010","0615.45.0010","0294.43.0020","2027.46.0060","0579.51.0010"],[2.5,2,3.5,3,1.5,2.5,2.5,1,3.5,3.5,4.5,3.5,4.5,3.5,4.5,4,4.5,4.5,4,3,5.5,5.5,6,6,7.5,6,6.5],["Avenue des Cavaliers 13","Rue Henri-ChristinÃ© 6","Rue du BelvÃ©dÃ¨re 9","Rue Chandieu 1","Rue du Vidollet 11","Chemin Taverney 6","Chemin Taverney 10","Grand-Rue 10","Chemin de Maisonneuve 12 B","Rue de la DÃ´le 12","Chemin des Palettes 33","Avenue Giuseppe-Motta 16","Avenue des Cavaliers 13","Rue Michel-Chauvet 4","Chemin de Castelver 10","Rue Lamartine 24 B","Rue de la Faucille 14","Avenue Giuseppe-Motta 16","Avenue Giuseppe-Motta 16","Rue Saint-LÃ©ger 8","Rue du Fort-Barreau 13","Chemin Charles-Poluzzi 29","Rue du ChÃ¢teau 2","Route de ChÃªne 53","Rue Jacques-Dalphin 37","Rue Charles-Giron 1","Chemin de Beau-Soleil 5"],[46.2024683,46.1945565,46.2049981,46.2158774,46.2159927,46.2299972,46.2297057,46.20209,46.2122871,46.2076048,46.1750094,46.2167452,46.2024683,46.1982716,46.1655653,46.2111247,46.2112803,46.2167452,46.2167452,46.1976599,46.2113528,46.1792898,46.2043919,46.2001689,46.1818628,46.2061894,46.1879451],[6.1840869,6.1424891,6.1311477,6.1344373,6.1381931,6.1177381,6.118199,6.1451254,6.1143063,6.13172,6.1193707,6.1316818,6.1840869,6.1565411,6.1866597,6.1295749,6.1399257,6.1316818,6.1316818,6.1462625,6.1407533,6.1479551,6.1308513,6.1723494,6.1401097,6.1306914,6.1598356],[1220,1250,1350,1500,1500,1580,1580,1600,1670,1750,2100,2160,2200,2300,2360,2400,2800,3030,3117,3200,3350,3500,4200,4500,4900,5050,6500],[95,85,null,120,70,90,90,100,165,145,170,160,205,155,140,180,170,200,220,150,197,200,265,350,350,350,385]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>id<\/th>\n      <th>rooms<\/th>\n      <th>address<\/th>\n      <th>latitude<\/th>\n      <th>longitude<\/th>\n      <th>rent<\/th>\n      <th>charges<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"dom":"tpi","columnDefs":[{"className":"dt-right","targets":[1,3,4,5,6]}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="parsing-with-the-offer-centric-way" class="section level4">
+<h4>Parsing with the “offer centric” way</h4>
+<p>In the “offer centric” way, we parse one offer at a time, extract all the fields of interest and store it into a list. We end up with a list of lists, where each list contain all the fields for one offer.</p>
+<p>To parse each offer, we are going to create a function <code>parse_offer</code> that works well on one offer and apply it to each offer with the help of the <code>purrr</code> package.</p>
+<p>Note that we are searching only for one value, so we use <code>html_node</code> and not <code>html_nodes</code>.</p>
+<pre class="r"><code>parse_offer &lt;- function(offer) {
+  list(
+    id = offer %&gt;%
+      rvest::html_node(&quot;.ref&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      stringr::str_replace(&quot;Ref. &quot;,&quot;&quot;),
+    
+    address = offer %&gt;%
+      rvest::html_node(&quot;.location-offer&quot;) %&gt;%
+      rvest::html_text(),
+  
+    room = offer %&gt;%
+      rvest::html_node(&quot;.ref-offer&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      stringr::str_replace(&quot; room[s]*&quot;,&quot;&quot;) %&gt;%
+      as.numeric(),
+    
+    latitude = offer %&gt;%
+      rvest::html_node(&quot;.infos-objet-address-lat&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      as.numeric(),
+
+    longitude = offer %&gt;%
+      rvest::html_node(&quot;.infos-objet-address-lng&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      as.numeric(),
+
+    rent = offer %&gt;%
+      rvest::html_node(&quot;.price-offer&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      stringr::str_replace(&quot;CHF &quot;,&quot;&quot;) %&gt;%
+      stringr::str_replace_all(&quot;[.]&quot;,&quot;&quot;) %&gt;%
+      stringr::str_replace(&quot;[-]&quot;,&quot;&quot;) %&gt;%
+      as.numeric(),
+
+    charges = offer %&gt;%
+      rvest::html_node(&quot;.charge-offer&quot;) %&gt;%
+      rvest::html_text() %&gt;%
+      stringr::str_replace(&quot;Charges: CHF &quot;,&quot;&quot;) %&gt;%
+      stringr::str_replace_all(&quot;[.]&quot;,&quot;&quot;) %&gt;%
+      stringr::str_replace(&quot;[-]&quot;,&quot;&quot;) %&gt;%
+      as.numeric()
+  )
+}</code></pre>
+<p><code>purrr::map</code> will create a list of lists. Each list in the list of lists can be bound as a row in a dataframe, thanks to <code>dplyr::bind_rows()</code>.</p>
+<pre class="r"><code>suppressMessages(library(purrr))
+
+offers &lt;- listing_offers %&gt;%
+  purrr::map(parse_offer) %&gt;%
+  dplyr::bind_rows() %&gt;%
+  na.omit()
+
+DT::datatable(
+  offers,
+  options = list(pageLength = 5, dom = &#39;tpi&#39;),
+  rownames = FALSE,
+  caption = &quot;Table 2 : Offers scraped using the offer centric way&quot;)</code></pre>
+<div id="htmlwidget-2" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-2">{"x":{"filter":"none","caption":"<caption>Table 2 : Offers scraped using the offer centric way<\/caption>","data":[["0033.41.0030","2040.41.0020","0510.45.0030","2457.41.0020","2018.48.0020","2020.47.0020","2190.44.0030","0577.43.0340","0090.45.0040","0108.43.0020","0022.42.0010","0033.45.0020","0138.40.0020","0690.41.0020","2062.43.0050","0571.43.0040","0022.40.0010","0022.43.0010","0082.44.0030","0569.42.0210","2581.43.0010","0695.42.0010","0615.45.0010","0294.43.0020","2027.46.0060","0579.51.0010"],["Avenue des Cavaliers 13","Rue Henri-ChristinÃ© 6","Rue Chandieu 1","Rue du Vidollet 11","Chemin Taverney 6","Chemin Taverney 10","Grand-Rue 10","Chemin de Maisonneuve 12 B","Rue de la DÃ´le 12","Chemin des Palettes 33","Avenue Giuseppe-Motta 16","Avenue des Cavaliers 13","Rue Michel-Chauvet 4","Chemin de Castelver 10","Rue Lamartine 24 B","Rue de la Faucille 14","Avenue Giuseppe-Motta 16","Avenue Giuseppe-Motta 16","Rue Saint-LÃ©ger 8","Rue du Fort-Barreau 13","Chemin Charles-Poluzzi 29","Rue du ChÃ¢teau 2","Route de ChÃªne 53","Rue Jacques-Dalphin 37","Rue Charles-Giron 1","Chemin de Beau-Soleil 5"],[2.5,2,3,1.5,2.5,2.5,1,3.5,3.5,4.5,3.5,4.5,3.5,4.5,4,4.5,4.5,4,3,5.5,5.5,6,6,7.5,6,6.5],[46.2024683,46.1945565,46.2158774,46.2159927,46.2299972,46.2297057,46.20209,46.2122871,46.2076048,46.1750094,46.2167452,46.2024683,46.1982716,46.1655653,46.2111247,46.2112803,46.2167452,46.2167452,46.1976599,46.2113528,46.1792898,46.2043919,46.2001689,46.1818628,46.2061894,46.1879451],[6.1840869,6.1424891,6.1344373,6.1381931,6.1177381,6.118199,6.1451254,6.1143063,6.13172,6.1193707,6.1316818,6.1840869,6.1565411,6.1866597,6.1295749,6.1399257,6.1316818,6.1316818,6.1462625,6.1407533,6.1479551,6.1308513,6.1723494,6.1401097,6.1306914,6.1598356],[1220,1250,1500,1500,1580,1580,1600,1670,1750,2100,2160,2200,2300,2360,2400,2800,3030,3117,3200,3350,3500,4200,4500,4900,5050,6500],[95,85,120,70,90,90,100,165,145,170,160,205,155,140,180,170,200,220,150,197,200,265,350,350,350,385]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>id<\/th>\n      <th>address<\/th>\n      <th>room<\/th>\n      <th>latitude<\/th>\n      <th>longitude<\/th>\n      <th>rent<\/th>\n      <th>charges<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"dom":"tpi","columnDefs":[{"className":"dt-right","targets":[2,3,4,5,6]}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+</div>
+<div id="visualize-the-data" class="section level2">
+<h2>Visualize the data</h2>
+<div id="looking-at-bivariate-relationship" class="section level3">
+<h3>Looking at bivariate relationship</h3>
+<p>We can check if rent and charges seem to be correlated.</p>
+<pre class="r"><code>suppressMessages(library(ggplot2))
+suppressMessages(library(hrbrthemes))
+
+offers %&gt;% ggplot(aes(x=rent, y=charges)) + 
+  geom_jitter(alpha=0.5) +
+  geom_smooth(method = &quot;lm&quot;, size=0.5, se = F, color=&quot;black&quot;) + 
+  annotate(geom=&quot;label&quot;, x=max(offers$rent), y=min(offers$charges),
+           label=paste(&quot;r(rent, charge) =&quot;, round(cor(offers$rent, offers$charges), 3)), 
+           hjust=1, fill=&quot;black&quot;, alpha=&quot;0.5&quot;, color=&quot;white&quot;) +
+  labs(title=stringr::str_to_title(&quot;Do charges go up with rent?&quot;),
+       subtitle=&quot;There seems to be a positive linear relationship between rent and charges.&quot;) +
+  theme_ipsum_rc()</code></pre>
+<p><img src="/post/1703311-scrape-a-list-of-rental-offers-using-rvest-and-purrr_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+</div>
+<div id="seeing-the-results-on-a-map" class="section level3">
+<h3>Seeing the results on a map</h3>
+<p>Lastly, because latitude and longitude were so easily obtained, we can pin each flat on a leaflet map.</p>
+<pre class="r"><code>suppressMessages(library(leaflet))
+
+m &lt;- leaflet(offers) %&gt;%
+  addProviderTiles(&quot;CartoDB.Positron&quot;) %&gt;%
+  addMarkers(lng=~longitude,
+             lat=~latitude,
+             popup=offers$address)
+m</code></pre>
+<div id="htmlwidget-3" style="width:672px;height:480px;" class="leaflet html-widget"></div>
+<script type="application/json" data-for="htmlwidget-3">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addProviderTiles","args":["CartoDB.Positron",null,null,{"errorTileUrl":"","noWrap":false,"zIndex":null,"unloadInvisibleTiles":null,"updateWhenIdle":null,"detectRetina":false,"reuseTiles":false}]},{"method":"addMarkers","args":[[46.2024683,46.1945565,46.2158774,46.2159927,46.2299972,46.2297057,46.20209,46.2122871,46.2076048,46.1750094,46.2167452,46.2024683,46.1982716,46.1655653,46.2111247,46.2112803,46.2167452,46.2167452,46.1976599,46.2113528,46.1792898,46.2043919,46.2001689,46.1818628,46.2061894,46.1879451],[6.1840869,6.1424891,6.1344373,6.1381931,6.1177381,6.118199,6.1451254,6.1143063,6.13172,6.1193707,6.1316818,6.1840869,6.1565411,6.1866597,6.1295749,6.1399257,6.1316818,6.1316818,6.1462625,6.1407533,6.1479551,6.1308513,6.1723494,6.1401097,6.1306914,6.1598356],null,null,null,{"clickable":true,"draggable":false,"keyboard":true,"title":"","alt":"","zIndexOffset":0,"opacity":1,"riseOnHover":false,"riseOffset":250},["Avenue des Cavaliers 13","Rue Henri-ChristinÃ© 6","Rue Chandieu 1","Rue du Vidollet 11","Chemin Taverney 6","Chemin Taverney 10","Grand-Rue 10","Chemin de Maisonneuve 12 B","Rue de la DÃ´le 12","Chemin des Palettes 33","Avenue Giuseppe-Motta 16","Avenue des Cavaliers 13","Rue Michel-Chauvet 4","Chemin de Castelver 10","Rue Lamartine 24 B","Rue de la Faucille 14","Avenue Giuseppe-Motta 16","Avenue Giuseppe-Motta 16","Rue Saint-LÃ©ger 8","Rue du Fort-Barreau 13","Chemin Charles-Poluzzi 29","Rue du ChÃ¢teau 2","Route de ChÃªne 53","Rue Jacques-Dalphin 37","Rue Charles-Giron 1","Chemin de Beau-Soleil 5"],null,null,null,null,null,null]}],"limits":{"lat":[46.1655653,46.2299972],"lng":[6.1143063,6.1866597]}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<div id="ressources" class="section level2">
+<h2>Ressources</h2>
+<ul>
+<li><a href="https://github.com/hadley/rvest">Homepage for rvest repo</a></li>
+<li><a href="https://stat4701.github.io/edav/2015/04/02/rvest_tutorial/">Tutorial explaining rvest basics</a></li>
+</ul>
+</div>

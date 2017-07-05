@@ -1,0 +1,205 @@
+---
+title: "Clojure for pythonista - Manipulating strings"
+author: "Xavier Adam"
+date: "2017-06-13"
+categories: ["clojure", "python"]
+tags: ["clojure", "python"]
+---
+
+
+
+<div id="foreword" class="section level2">
+<h2>Foreword</h2>
+<p>I am trying to learn clojure. This series of posts is my attempt to solve beginner exercises both in python and clojure. Exercises are inspired by the excellent Reuven Lerner’s <a href="https://practicemakespython.com/">Practice Makes Python</a> and other sources like <a href="https://learnpythonthehardway.org/">Learn python the hard way</a>. Before trying any exercises, you can read an excellent introduction to clojure : <a href="http://www.braveclojure.com/do-things/">Brave Clojure</a>.</p>
+</div>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>This exercise introduces ways to deal with strings.</p>
+</div>
+<div id="goal" class="section level2">
+<h2>Goal</h2>
+<p>Create a command line script that asks the user to enter a word, sort the letters in alphabetic order and output the sentence “Your letters are: <word-in-alphabetic-order>”. The idea is to play both with characters sequence and string interpolation.</p>
+</div>
+<div id="reordering-letters" class="section level2">
+<h2>Reordering letters</h2>
+<div id="reordering-letters-in-python" class="section level3">
+<h3>Reordering letters in python</h3>
+<p>In python, strings are treated like sequences of characters, so you can iterate over them like you would do on a list. There is no character type and functions that “reclaim” character as argument (e.g <code>ord()</code>, which gives the unicode code point) are in fact asking for <a href="https://docs.python.org/3/library/functions.html#ord">strings of one character</a>.</p>
+<pre class="python"><code># python
+ord(&#39;bla&#39;)
+&gt; TypeError: ord() expected a character, but string of length 3 found</code></pre>
+<pre class="python"><code># python
+ord(&#39;a&#39;)
+&gt; 97
+ord(&#39;b&#39;)
+&gt; 98</code></pre>
+<p>When using operators like greater-than or smaller-than on characters, the unicode code points are compared (so no need to use <code>ord()</code>).</p>
+<pre class="python"><code># python
+&#39;a&#39; &lt; &#39;b&#39;
+&gt; True</code></pre>
+<p>Although strings are iterable like lists, they don’t have all the list’s functions. For example, you cannot use <code>.sort()</code> on a string. You would have to convert it to a list first with <code>list()</code>. Note that <code>.sort()</code> changes the list in place and return <code>None</code>.</p>
+<pre class="python"><code># python
+my_str = &quot;bla&quot;
+my_str.sort()
+&gt; AttributeError: &#39;str&#39; object has no attribute &#39;sort&#39;
+
+my_str = list(my_str)
+my_str
+&gt; [&#39;b&#39;, &#39;l&#39;, &#39;a&#39;]
+my_str.sort()
+my_str
+&gt; [&#39;a&#39;, &#39;b&#39;, &#39;l&#39;]</code></pre>
+<p>To make things simpler, python has the <code>sorted</code> function, which work on any iterable, not just list. It also has the benefit of returning a new list rather than changing the list in-place.</p>
+<pre class="python"><code># python
+sorted(&quot;bla&quot;)
+&gt; [&#39;a&#39;, &#39;b&#39;, &#39;l&#39;]</code></pre>
+<p>For more info on the difference between <code>.sort()</code> and <code>sorted</code>, read this <a href="https://stackoverflow.com/questions/22442378/what-is-the-difference-between-sortedlist-vs-list-sort-python">SO thread</a>.</p>
+<p>Both <code>.sort()</code> and <code>sorted</code> return list of characters. To convert this list back to a normal string, we can use <a href="https://docs.python.org/3/library/stdtypes.html?highlight=join#str.join"><code>str.join(iterable)</code></a>. Note that <code>str</code> here refers to the separator that will be placed between each element of the iterable.</p>
+<pre class="python"><code># python
+&quot;&quot;.join(sorted(&quot;bla&quot;))
+&gt; &#39;abl&#39;</code></pre>
+</div>
+<div id="reordering-letters-in-clojure" class="section level3">
+<h3>Reordering letters in clojure</h3>
+<p>In clojure, there is a character type, which is different than the string type. Strings (even with only one character) are delimited by double quotes. Characters have a <code>\</code> prefix.</p>
+<pre class="clojure"><code>;; clojure
+(= &quot;a&quot; &quot;a&quot;)
+&gt; true
+
+(= \a \a)
+&gt; true
+
+(= &quot;a&quot; \a)
+&gt; false
+
+(type &quot;a&quot;)
+&gt; java.lang.String
+
+(type \a)
+&gt; java.lang.Character</code></pre>
+<p>Operators like greater-than or smaller-than don’t work on strings or characters.</p>
+<pre class="clojure"><code>;; clojure
+(&gt; \a &quot;a&quot;)
+&gt; java.lang.ClassCastException: 
+&gt; java.lang.String cannot be cast to java.lang.Number
+
+(&gt; &quot;b&quot; \a)
+&gt; java.lang.ClassCastException: 
+&gt; java.lang.Character cannot be cast to java.lang.Number</code></pre>
+<p>As the error message states, these operators need Number and neither strings nor character are automatically casted to Number. You need to use <a href="https://clojuredocs.org/clojure.core/int"><code>int</code></a> (like we did with <code>ord()</code> in python). This coerse numbers to integer but also characters to unicode points. It does not work on strings.</p>
+<pre class="clojure"><code>;; clojure
+(int \a)
+&gt; 97
+
+(int &quot;a&quot;)
+&gt; java.lang.ClassCastException: 
+&gt; java.lang.String cannot be cast to java.lang.Character</code></pre>
+<p>Now we can compare characters, according to “alphabetical order” (at least unicode points).</p>
+<pre class="clojure"><code>;; clojure
+(&lt; (int \a) (int \c))
+&gt; true</code></pre>
+<p>To convert a single-character string to a character, we would need new functions:</p>
+<ul>
+<li><a href="https://clojuredocs.org/clojure.core/seq"><code>seq</code></a> takes a collection and return a seq. When used on strings, it returns a seq of the letters in the string, coerced to character.</li>
+<li><a href="https://clojuredocs.org/clojure.core/first"><code>first</code></a> returns the first item of a collection. It is useful in our case since seq will give us a single item collection, rather than just a character.</li>
+</ul>
+<pre class="clojure"><code>;; clojure
+(seq &quot;a&quot;)
+&gt; (\a)
+(first (seq &quot;a&quot;))
+&gt; \a
+(int (first (seq &quot;a&quot;)))
+&gt; 97</code></pre>
+<p>An alternative to <code>first</code> would be to use <a href="https://clojuredocs.org/clojure.core/apply"><code>apply</code></a>, which lets you convert a collection to a list of arguments for a function. This is similar to unpacking argumets with <a href="https://docs.python.org/3/tutorial/controlflow.html#unpacking-argument-lists"><code>*args</code> at function call in python</a>.</p>
+<pre class="clojure"><code>;; clojure
+(int (seq &quot;a&quot;))
+&gt; java.lang.ClassCastException: 
+&gt; clojure.lang.StringSeq cannot be cast to java.lang.Character
+
+(apply int (seq &quot;a&quot;))
+&gt; 97</code></pre>
+<p>Fortunately, sorting the letters of a strings in alphabetical order don’t require manual comparaison of each characters. The <a href="https://clojuredocs.org/clojure.core/sort"><code>sort</code></a> function does both the conversion to characters and the sorting.</p>
+<pre class="clojure"><code>;; clojure
+(sort &quot;hello&quot;)
+&gt; (\e \h \l \l \o)</code></pre>
+<p>To join the characters back into a word, we can use <code>str</code>, which concatenate strings and/or characters. <code>str</code> expect arguments not a seq of characters, so we can use our <code>apply</code> function again.</p>
+<pre class="clojure"><code>;; clojure
+;; intended use
+(str \e \h \l \l \o)
+&gt; &quot;ehllo&quot;
+
+;; wrong
+(str (\e \h \l \l \o))
+&gt; &quot;(\\e \\h \\l \\l \\o)&quot;
+
+;; workaround using apply
+(apply str (\e \h \l \l \o))
+&gt; &quot;ehllo&quot;</code></pre>
+<p>An alternative to <code>str</code>, closer to python’s <code>join</code> is <a href="https://clojuredocs.org/clojure.string/join"><code>clojure.string/join</code></a>. It allows to choose a separator and expects an iterable as argument (no need for <code>apply</code>).</p>
+<pre class="clojure"><code>;; clojure
+(clojure.string/join &quot;&quot; (sort &quot;hello&quot;))
+&gt; &quot;ehllo&quot;
+(clojure.string/join &quot;,&quot; (sort &quot;hello&quot;))
+&gt; &quot;e,h,l,l,o&quot;</code></pre>
+</div>
+</div>
+<div id="string-interpolation" class="section level2">
+<h2>String interpolation</h2>
+<div id="string-interpolation-in-python" class="section level3">
+<h3>String interpolation in python</h3>
+<p>When starting out with python, it is tempting to use simple concatenate patterns to insert variable in strings.</p>
+<pre class="python"><code># python
+# Using +
+alpha_string = &quot;&quot;.join(sorted(&quot;hello&quot;))
+&quot;Your reordered string is: &quot; + alpha_string + &quot;!&quot;)
+&gt; &quot;Your reordered string is: ehllo!&quot;
+
+# Using join (poor choice, note that you get a space between ehllo and !)
+&quot; &quot;.join([&quot;Your reordered string is:&quot;, alpha_string, &quot;!&quot;])
+&gt; &quot;Your reordered string is: ehllo !&quot;</code></pre>
+<p>But you can get much nicer syntax and options using string interpolation. For example, the two examples above would fail if <code>alpha_string</code> was a number. They would not do an implicit conversion to string, like the methods below.</p>
+<p>Python 3.6 supports 3 types of interpolation: <code>%</code>, <code>.format</code> and <code>literal string f</code>. These are <a href="https://zerokspot.com/weblog/2015/12/31/new-string-formatting-in-python/">well</a> <a href="https://blog.lerner.co.il/teaching-old-dog-new-tricks-learned-love-str-format-gave/">covered</a> <a href="https://www.python.org/dev/peps/pep-0498/">online</a>.</p>
+<p>For simple variable <code>literal f strings</code> are definitely more readable:</p>
+<pre class="python"><code># python
+alpha_string = &quot;&quot;.join(sorted(&quot;hello&quot;))
+# Using .format
+&quot;Your reordered string is: {}!&quot;.format(alpha_string)
+&gt; &quot;Your reordered string is: ehllo!&quot;
+
+# Using f (&gt;= 3.6)
+f&quot;Your reordered string is: {alpha_string}!&quot;
+&gt; &quot;Your reordered string is: ehllo!&quot;</code></pre>
+<p>For dictionary, it is more a matter of taste, thanks to dictionary unpacking:</p>
+<pre class="python"><code># python
+user = {&#39;name&#39;: &#39;Jane&#39;, &#39;city&#39;: &#39;Geneva&#39;}
+# Using .format
+&quot;{name} lives in {city}&quot;.format(**user)
+&gt; &quot;Jane lives in Geneva&quot;
+
+# Using f (&gt;= 3.6)
+f&quot;{user[&#39;name&#39;]} lives in {user[&#39;city&#39;]}&quot;
+&gt; &quot;Jane lives in Geneva&quot;</code></pre>
+</div>
+<div id="string-interpolation-in-clojure" class="section level3">
+<h3>String interpolation in clojure</h3>
+<p>Similar to <code>+</code>/<code>join</code> in python, you can do basic, not very practical, insertion of variables with <code>str</code>/<code>clojure.string/join</code> with clojure. Unlike python, both methods will convert number to string for you.</p>
+<pre class="clojure"><code>;; clojure
+(def alphastring (apply str (sort &quot;hello&quot;)))
+
+;; Using str
+(str &quot;Your reordered string is: &quot; alphastring &quot;!&quot;)
+&gt; &quot;Your reordered string is: ehllo!&quot;
+
+;; Using join (poor choice, note that you get a space between alphastring and &quot;!&quot;)
+(clojure.string/join &quot; &quot; [&quot;Your reordered string is:&quot; alphastring &quot;!&quot;])
+&gt; &quot;Your reordered string is: ehllo !&quot;</code></pre>
+<p>Interpolation can be done with <a href="https://clojuredocs.org/clojure.core/format"><code>format</code></a>, a pattern similar to <code>%-formatting</code> in python. The list of <code>%-characters</code> <a href="https://dzone.com/articles/java-string-format-examples">can be found here</a>.</p>
+<pre class="clojure"><code>;; clojure
+(def name &quot;Jane&quot;)
+(def city &quot;Geneva&quot;)
+(def age 33)
+(format &quot;%s lives in %s and is %d!&quot; name city age)
+&gt; &quot;Jane lives in Geneva and is 33!&quot;</code></pre>
+<p>Clojure string interpolation options are well explained in <a href="https://dzone.com/articles/java-string-format-examples">this article</a>, including a benchmark of their speed. The article ends up showcasing <code>core.incubator</code>’s <code>&lt;&lt;</code> macro which even lets you do string interpolation in a similar way to ruby or python’s <code>f</code>.</p>
+</div>
+</div>

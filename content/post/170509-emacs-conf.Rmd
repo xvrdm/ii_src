@@ -1,0 +1,141 @@
+---
+title: "A minimal emacs setup with orgmode"
+date: "2017-05-29"
+categories: ["emacs"]
+tags: ["emacs", "org-mode"]
+---
+## Foreword
+Trying to start using emacs can be a bit intimidating. Very rough looking outside the box, complex keyboard shortcuts, configuration in emacs-elisp language... I personally decided to try the switch (from vim) for the following reasons:
+
+- once configured well, emacs can rival in features with many of IDE. [Elpy](https://elpy.readthedocs.io/) looks great for python and [CIDER](https://cider.readthedocs.io/) looks amazing for clojure.
+- with EVIL mode, you can use VIM key-bindings in emacs
+- [org-mode](http://orgmode.org/) lets you do things you wouldn't believe possible with plain text
+- emacs can [look good](https://github.com/hlissner/.emacs.d)!
+
+There are well explained stories of vim users migrating to emacs:
+
+- [Evil Mode: Or, How I Learned to Stop Worrying and Love Emacs - YouTube](https://www.youtube.com/watch?v=JWD1Fpdd4Pc)
+- [From Vim to Emacs+Evil chaotic migration guide](https://juanjoalvarez.net/es/detail/2014/sep/19/vim-emacsevil-chaotic-migration-guide/)
+
+But before implementing advanced features, you might want to put in place a setup that lets you start with the bare minimum (i.e vim key-bindings and an *easy* to customize config file). Emacs is configured with a programming language called emacs-lisp. For people not knowing emacs-lisp at all, it makes sense to use [literate programming](https://en.wikipedia.org/wiki/Literate_programming) and [org-babel](http://orgmode.org/worg/org-contrib/babel/), a technique that lets you heavily document your code. Literate programming isn't a paradigm that necessarily work well to write entire programs with. But for config files in unknown programming languages, it's great. Literate programming is often used for analysis and if you are coming from python or R, this is similar to what you do in [jupyter](http://jupyter.org/) or [r notebooks](http://rmarkdown.rstudio.com/r_notebooks.html). 
+
+## Install emacs
+
+First you need to install emacs. You can start [here](https://www.gnu.org/software/emacs/) or from any of the hundred of tutorials online. At the time of this post, version 25.2 is out and that is the one I am using.
+
+## Set up org-babel config file
+
+Depending on how you installed emacs, you might have a `.emacs` file in you home directory `~`. This is similar to `.vimrc` file for vim and usually contains config commands that are loaded at start up.
+
+However, from the [doc](https://www.gnu.org/software/emacs/manual/html_node/emacs/Init-File.html), we can see that there are other options to load your config:
+
+> When Emacs is started, it normally tries to load a Lisp program from an initialization file, or init file for short. This file, if it exists, specifies how to initialize Emacs for you. Emacs looks for your init file using the filenames ~/.emacs, ~/.emacs.el, or ~/.emacs.d/init.el; you can choose to use any one of these three names (see Find Init). Here, ~/ stands for your home directory. 
+
+In our case, we want to use `~/.emacs.d/init.el` instead of `~/.emacs` and use it exclusively to setup package management and load an org-babel config file (`~/.emacs.d/emacs-config.org`). The difference in extension is important. `.el` files are written in emacs-lisp, the programming language powering emacs. `.org` files are org-mode files, basically plain text file that can mix code and text.
+
+Note that if you are using windows, the `~` directory might be `C:\Users\<user-name>\AppData\Roaming` or even something else. There are hints [here](https://www.gnu.org/software/emacs/manual/html_node/efaq-w32/Location-of-init-file.html).
+
+1. Delete file `~/.emacs` if you have one
+2. Create dir `~/.emacs.d/` if you don't have one
+3. Create file `~/.emacs.d/init.el` if you don't have one
+4. In `~/.emacs.d/init.el`, we need only to do a few things:
+    - setup emacs so that it can download packages from the [MELPA package server](http://melpa.milkbox.net/)
+    - install the [`use-package`](https://github.com/jwiegley/use-package) package which simplify package management (all other package will be installed in `emacs-config.org`)
+    - load the `org` package and use the `org-babel-load-file` function to load the code inside `~/.emacs.d/emacs-config.org` at emacs start up.
+
+In `~/.emacs.d/init.el` (lines starting with `;;` are comments):
+```{emacslisp, eval=FALSE}
+;; add MELPA package server
+(require 'package)
+
+(add-to-list 'package-archives 
+  '("melpa" . "http://melpa.milkbox.net/packages/"))
+
+(unless package-archive-contents
+  (package-refresh-contents))
+
+(package-initialize)
+
+;; if not yet installed, install package use-package
+(unless (package-installed-p 'use-package)
+  (package-install 'use-package))
+
+;; load org package and our emacs-config.org file
+(require 'org)
+(org-babel-load-file "~/.emacs.d/emacs-config.org") 
+```
+
+5. Lastly, create file `~/.emacs.d/emacs-config.org`, which will host the bulk of our config and the explanations. Lines starting with `#+` are org-mode document metadata. Lines starting with `*` are content headers (number of asterisks representing the header level). Code block are wrapped between  `#+BEGIN_SRC emacs-lisp` and `#+END_SRC`. 
+
+In `~/.emacs.d/emacs-config.org`:
+
+```{orgmode, eval=FALSE}
+#+TITLE: Emacs configuration
+#+DESCRIPTION: An org-babel based emacs configuration
+#+LANGUAGE: en
+#+PROPERTY: results silent
+
+* Remove startup welcome screen
+The code block below toggle off the welcome startup screen.
+
+#+BEGIN_SRC emacs-lisp
+(custom-set-variables
+  '(inhibit-startup-screen t))
+#+END_SRC
+```
+
+As you can see, we can now document the code not only with comment but with [hierarchical headers](http://orgmode.org/guide/Headlines.html#Headlines), [lists](http://orgmode.org/guide/Plain-lists.html#Plain-lists), [tables](http://orgmode.org/guide/Tables.html#Tables), [links](http://orgmode.org/guide/External-links.html#External-links) and [all the other things](http://orgmode.org/guide/) offered by org-mode.
+
+If you are trying to do this step by step and run emacs every time, you might notice that emacs will complain if you use `(org-babel-load-file <path>)` in `init.el` on a non existing or empty file. This should go away as soon as you have at least one valid code block in your `emacs-config.org`. Above we removed the welcome screen displayed by default at emacs launch. 
+
+You will notice that on first run, emacs create a `~/.emacs.d/emacs-config.el` file that contains only the code that we wrapped in code blocks in our `emacs-config.org`. This file will be updated each time you change your `emacs-config.org` file and restart emacs.
+
+You might also notice that on first run, emacs will append some lines to our `init.el` file. Something like:
+
+```{emacslisp, eval=FALSE}
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(inhibit-startup-screen t)
+ '(package-selected-packages (quote (use-package))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
+```
+
+These lines should not be touched.
+
+## Adding Vim key-bindings
+From now on, we can add the rest of our config in `emacs-config.org`. We will enable vim keybindings by installing our first package via [`use-package`](https://github.com/jwiegley/use-package), called `EVIL`.
+
+Some reasons to use `use-package` for your package management and config:
+
+- you can wrap together in the same function the install, enabling and config of each package. This keeps things neatly organized.
+- the `:ensure` keyword, when set to true (`t`), will install the package if it's not installed yet.
+- it's easy to install/load packages depending on the operating system
+
+Append the following lines to `~/.emacs.d/emacs-config.org`:
+
+```{orgmode, eval=FALSE}
+* EVIL
+** Install
+Install EVIL (if not yet installed), and enable it.
+
+#+BEGIN_SRC emacs-lisp
+(use-package evil
+  :ensure t
+  :config
+  (evil-mode 1))
+#+END_SRC
+```
+
+Restart EMACS. On my machine, I often get error when I start EMACS with new packages. Closing it once and restarting a second time usually works well.
+
+![The type of error I get on first start with new package](/img/1705091-scrsh-emacs-error.png)
+
+After your second restart, you should be all set to start using emacs.

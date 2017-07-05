@@ -60,9 +60,9 @@ head(listing_offers)
 
 Now that we have a list of offers, we need to find a way to extract the data of interest from each offer and store it in a usable format. There are at least two way to proceed: a "field centric" way and an "offer centric" way. 
 
-#### Parsing with the field centric way
+#### Parsing with the "field centric" way
 
-In the "field centric" way, we grab one field of interest (`rent`, `rooms`, `address`...) at a time for all the offers. We end up with vectors containing the value of the field for each offer. These vector can then be combined into a dataframe. The "field centric" way is described in the lego movie example on `rvest`'s [github repo](http://web.archive.org/web/20160113072819/https://github.com/hadley/rvest)
+In the "field centric" way, we grab one field of interest (`rent`, `rooms`, `address`...) at a time for all the offers. We end up with vectors containing the value of the field for each offer. These vector can then be combined into a dataframe. The "field centric" way is described in the lego movie example on [`rvest`'s github repo](http://web.archive.org/web/20160113072819/https://github.com/hadley/rvest)
 
 `id` and `address` can be stored as text and only need a bit of cleanup.
 
@@ -77,7 +77,7 @@ address <- listing_offers %>%
   rvest::html_text()
 ```
 
-`rooms`, `latitude`, `longitude`, `rent` and `charges` are better saved as numeric after removal of prefix/suffix like currencies.
+`rooms`, `latitude`, `longitude`, `rent` and `charges` are better saved as numeric after removal of prefix/suffix like currencies. Note that `stringr`'s `str_replace` can search for regular expressions pattern, which let us do things like removing `room` and `rooms` in one call.
 
 ```{r}
 rooms <- listing_offers %>%
@@ -132,7 +132,7 @@ DT::datatable(
   caption = "Table 1 : Offers scraped using the field centric way")
 ```
 
-#### Parsing with the offer centric way
+#### Parsing with the "offer centric" way
 
 In the "offer centric" way, we parse one offer at a time, extract all the fields of interest and store it into a list. We end up with a list of lists, where each list contain all the fields for one offer.
 

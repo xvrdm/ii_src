@@ -1,0 +1,148 @@
+---
+title: "Clojure for pythonista - User Input/Loop/Conditional"
+author: "Xavier Adam"
+date: "2017-06-08"
+categories: ["clojure", "python"]
+tags: ["clojure","python"]
+---
+
+
+
+<div id="foreword" class="section level2">
+<h2>Foreword</h2>
+<p>I am trying to learn clojure. This series of posts is my attempt to solve beginner exercises both in python and clojure. Exercises are inspired by the excellent Reuven Lerner’s <a href="https://practicemakespython.com/">Practice Makes Python</a> and other sources like <a href="https://learnpythonthehardway.org/">Learn python the hard way</a>. Before trying any exercises, you can read an excellent introduction to clojure : <a href="http://www.braveclojure.com/do-things/">Brave Clojure</a>.</p>
+</div>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>This exercise introduces the following concepts: user-input, conditional and loop.</p>
+</div>
+<div id="goal" class="section level2">
+<h2>Goal</h2>
+<p>Create a command line game where the user has to guess a number between 0 and 99. The final program should repeat the question until the user find the right number, providing a helpful “Higher!” or “Lower!” hint after each failed attempt.</p>
+</div>
+<div id="getting-random-numbers" class="section level2">
+<h2>Getting random numbers</h2>
+<div id="getting-random-numbers-in-python" class="section level3">
+<h3>Getting random numbers in python</h3>
+<p>In python, random integers can be obtained from <code>randint</code>, a function from the <code>random</code> package.</p>
+<pre class="python"><code># python
+import random
+# Get a random number between 0 and 99
+number = random.randint(0, 100)</code></pre>
+</div>
+<div id="getting-random-numbers-in-clojure" class="section level3">
+<h3>Getting random numbers in clojure</h3>
+<p>In clojure, you get random integer from the <code>rand-int</code> function (which by default start at 0 and end at the first argument)</p>
+<pre class="clojure"><code>;; clojure
+(def -main []
+  (rand-int 100))</code></pre>
+</div>
+</div>
+<div id="getting-user-input" class="section level2">
+<h2>Getting user input</h2>
+<div id="getting-user-input-in-python" class="section level3">
+<h3>Getting user input in python</h3>
+<p>In python, you can get user input with the <code>input</code> function. <code>input</code> takes a string as an argument that you can use to display a prompt to the user. To make sure that the input is converted to a integer, we wrap the <code>input</code> call in <code>int</code>.</p>
+<pre class="python"><code># python
+guess = int(input(&quot;Enter a guess: &quot;))</code></pre>
+</div>
+<div id="getting-user-input-in-clojure" class="section level3">
+<h3>Getting user input in clojure</h3>
+<p>In clojure, you can get user input with the <a href="https://clojuredocs.org/clojure.core/read-line"><code>read-line</code></a> function. The conversion to an integer is also necessary and you can use <code>Integer/parseInt</code> for that. <code>read-line</code> doesn’t have prompt feature, so we will print the prompt to the console with <a href="https://clojuredocs.org/clojure.core/read-line"><code>println</code></a>.</p>
+<pre class="clojure"><code>;; clojure
+(defn -main []
+  (println &quot;Enter a guess:&quot;)
+  (let [guess (Integer/parseInt (read-line))]))</code></pre>
+</div>
+</div>
+<div id="conditionals" class="section level2">
+<h2>Conditionals</h2>
+<div id="conditionals-in-python" class="section level3">
+<h3>Conditionals in python</h3>
+<p>Now that we have a random number and a number entered by the user, we need to compare them and send the response response.</p>
+<pre class="python"><code># python
+import random
+number = random.randint(0, 100)
+guess = int(input(&quot;Enter a guess: &quot;))
+
+if number &gt; guess:
+    print(&quot;Too small!&quot;)
+elif number &lt; guess:
+    print(&quot;Too big!&quot;)
+else:
+    print(&quot;Correct!&quot;)</code></pre>
+</div>
+<div id="conditionals-in-clojure" class="section level3">
+<h3>Conditionals in clojure</h3>
+<p>In clojure, the <a href="http://www.braveclojure.com/do-things/#if"><code>if</code></a> function seems to be designed for single comparison. It works as a simple “if/else”: <code>(if &lt;test&gt; &lt;do-if-true&gt; &lt;do-if-false&gt;)</code>. There is no such thing as <code>elif</code>. However, clojure has <a href="https://clojuredocs.org/clojure.core/cond"><code>cond</code></a> function, which allow for as many comparison as we like. The keyword <code>:else</code> is just the last comparison and evaluate to <code>true</code>, if no other comparison have been <code>true</code> before it. We could have chosen any other truthy value (e.g <code>:otherwise</code> or <code>1</code>).</p>
+<pre class="clojure"><code>;; clojure
+(defn -main []
+  (let [number (rand-int 100)]
+    (println &quot;Enter a guess:&quot;)
+    (let [guess (Integer/parseInt (read-line))]
+      (cond (&gt; number guess)
+              (println &quot;Too Low!&quot;)
+            (&lt; number guess)
+              (println &quot;Too Big!&quot;)
+            :else
+              (println &quot;Yeah!&quot;)))))</code></pre>
+</div>
+</div>
+<div id="loop-to-repeat-the-question" class="section level2">
+<h2>Loop to repeat the question</h2>
+<div id="loop-to-repeat-the-question-in-python" class="section level3">
+<h3>Loop to repeat the question in python</h3>
+<p>Lastly, we need to make the program able to repeat the question when the answer is wrong.</p>
+<p>In python, never-ending loop are often implemented with <code>while True</code>, using the <code>break</code> keyword to exit on specific conditions.</p>
+<pre class="python"><code># python
+import random
+number = random.randint(0, 100)
+
+while True:
+    guess = int(input(&quot;Enter a guess: &quot;))
+    if number &gt; guess:
+        print(&quot;Too small!&quot;)
+    elif number &lt; guess:
+        print(&quot;Too big!&quot;)
+    else:
+        print(&quot;Correct!&quot;)
+        break</code></pre>
+</div>
+<div id="loop-to-repeat-the-question-in-clojure" class="section level3">
+<h3>Loop to repeat the question in clojure</h3>
+<p>In clojure, you can take the opposite approach. Rather than saying “when to exit” (<code>break</code>), we can use the <a href="http://www.braveclojure.com/do-things/#loop"><code>loop</code></a> function and tell it “when to loop” (<code>recur</code>):</p>
+<pre class="clojure"><code>;; clojure
+(defn -main []
+  (let [number (rand-int 100)]
+    (loop []
+      (println &quot;Enter a guess:&quot;)
+      (let [guess (Integer/parseInt (read-line))]
+        (cond (&gt; number guess)
+                (do (println &quot;Too Low!&quot;)
+                    (recur))
+              (&lt; number guess)
+                (do (println &quot;Too Big!&quot;)
+                    (recur))
+              :else
+                (println &quot;Yeah!&quot;))))))</code></pre>
+<p>Note that we had to wrap the “actions” following each <code>cond</code>’s conditions with the <a href="http://www.braveclojure.com/do-things/#do"><code>do</code></a> function, a simple way to group multiple statements into one. Otherwise, the first call to <code>(recur)</code> (after “Too Low!”) would be interpreted as the second condition for <code>cond</code> (instead of <code>(&lt; number guess)</code>).</p>
+<p>Alternatively, you could use a recursive function. I haven’t been able to find if for such a short problem one method is better than the other, but this is a good illustration of a program with two functions.</p>
+<pre class="clojure"><code>;; clojure
+(defn try-and-guess [number]
+  (println &quot;Enter your guess:&quot;)
+  (let [guess (Integer/parseInt (read-line))]
+    (cond
+      (&lt; guess number) 
+        (do (println &quot;Guess is too small...&quot;)
+            (try-and-guess number))
+      (&gt; guess number)
+        (do (println &quot;Guess is too big...&quot;)
+            (try-and-guess number))
+      :else
+      (println &quot;Yeah!&quot;))))
+
+(defn -main []
+  (let [number (rand-int 100)]
+    (try-and-guess number)))</code></pre>
+</div>
+</div>

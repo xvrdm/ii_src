@@ -24,7 +24,7 @@ In a [previous post](https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-
 suppressMessages(library(xml2))
 suppressMessages(library(rvest))
 ```
-```{r, cache=TRUE}
+```{r}
 # Create an html document
 listing_url <- "https://www.moservernet.ch/en/apartments-for-rent/"
 listing_html <- xml2::read_html(listing_url)
@@ -186,4 +186,4 @@ extra_info <- grep(".*([0-9]{4}\\.[0-9]{2}\\.[0-9]{4}).*",
 knitr::kable(head(extra_info))
 ```
 
-Thanks to the common `id` field, we can join this dataframe with the one obtained in the [previous post](https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/).
+Thanks to the common `id` field, we can [join](http://dplyr.tidyverse.org/reference/join.html) this dataframe with the one obtained in the [previous post](https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/).

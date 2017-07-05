@@ -1,0 +1,220 @@
+---
+title: "Scrape linked webpages using rvest and purrr"
+author: "Xavier Adam"
+date: "2017-04-16"
+categories: ["R"]
+tags: ["R","RMarkdown","rvest","xml2","purrr","dplyr","scraping"]
+---    
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>The offers on real estate websites aren’t always in an easy-to-use format, especially if you want to compare offers from multiple agencies.</p>
+<p>In a <a href="https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/">previous post</a>, we saw how to scrape a listing of apartments on a single page with R. However, listings usually do not include all the details about the items. They usually only list a condensed version of the information and a url to a “detail” page, which contains the rest of the fields. For example, we could not add any insight about “Floors” to our dataset as “Floor” is only detailled on each apartement details page. In this post, we will see how to:</p>
+<ol style="list-style-type: decimal">
+<li>find the URL for each apartment</li>
+<li>scrape details found on each details page</li>
+<li>combine these details into a single dataframe</li>
+<li>merge this detail dataframe with our original dataframe</li>
+</ol>
+</div>
+<div id="scraping-the-data" class="section level2">
+<h2>Scraping the data</h2>
+<div id="getting-the-urls-for-each-apartment" class="section level3">
+<h3>Getting the URLs for each apartment</h3>
+<pre class="r"><code># Load needed packages
+suppressMessages(library(xml2))
+suppressMessages(library(rvest))</code></pre>
+<pre class="r"><code># Create an html document
+listing_url &lt;- &quot;https://www.moservernet.ch/en/apartments-for-rent/&quot;
+listing_html &lt;- xml2::read_html(listing_url)
+
+# Find all the nodes with class &quot;offer&quot; in id &quot;offers&quot;
+offers &lt;- listing_html %&gt;%
+  html_nodes(&quot;#offers .offer&quot;)
+
+# Extract the first target url of each first link in each node
+offers_urls &lt;- offers %&gt;%
+  html_node(&quot;a&quot;) %&gt;%
+  html_attr(&quot;href&quot;)
+
+head(offers_urls)</code></pre>
+<pre><code>## [1] &quot;/en/apartments-for-rent/paquis-2-rooms--2454.44.0030&quot;          
+## [2] &quot;/en/apartments-for-rent/plainpalais-2-rooms--2040.41.0020&quot;     
+## [3] &quot;/en/apartments-for-rent/saint-jean-3-5-rooms--2066.41.0010&quot;    
+## [4] &quot;/en/apartments-for-rent/grand-pre-3-rooms--0510.45.0030&quot;       
+## [5] &quot;/en/apartments-for-rent/grand-pre-1-5-rooms--2457.41.0020&quot;     
+## [6] &quot;/en/apartments-for-rent/grand-saconnex-2-5-rooms--2018.48.0020&quot;</code></pre>
+</div>
+<div id="using-one-example-to-map-our-scraping" class="section level3">
+<h3>Using one example to map our scraping</h3>
+<p>Using the first link as an example, we can explore how the data should be scraped.</p>
+<pre class="r"><code>offer_url &lt;- offers_urls[1]
+offer_url</code></pre>
+<pre><code>## [1] &quot;/en/apartments-for-rent/paquis-2-rooms--2454.44.0030&quot;</code></pre>
+<p>The id of each offer is actually available directly in the URL.</p>
+<pre class="r"><code>id &lt;- offer_url %&gt;%
+  sub(&quot;.*([0-9]{4}\\.[0-9]{2}\\.[0-9]{4}).*&quot;,
+      &quot;\\1&quot;, .)
+id</code></pre>
+<pre><code>## [1] &quot;2454.44.0030&quot;</code></pre>
+<p>Next we need to scrape the data contained at this URL. As links are relative, we start by rebuilding the full link, which we use with <code>xml2::read_html()</code>.</p>
+<pre class="r"><code># Create full URL for offer
+BASE_URL &lt;- &quot;https://www.moservernet.ch&quot;
+offer_full_url &lt;- paste0(BASE_URL, offer_url)
+
+# Scrape HTML for offer
+offer_html &lt;- xml2::read_html(offer_full_url)</code></pre>
+<div class="figure">
+<img src="/img/1704161-scrsh-msrvrn-apartment-source.png" alt="Screenshot of source code for apartment detail webpage" />
+<p class="caption">Screenshot of source code for apartment detail webpage</p>
+</div>
+<p>Looking at the source code, we can see that the attributes we are after (“Floor” and “Surface area”) are located in the same node: a <code>h2</code> tag contained in a <code>td</code> tag with <code>itemprop=itemOffered</code>.</p>
+<pre class="r"><code>offer_attr &lt;- offer_html %&gt;%
+  html_node(&quot;[itemprop=itemOffered]&quot;) %&gt;%
+  html_text() %&gt;%
+  stringr::str_trim() %&gt;%
+  stringr::str_split(&quot; - &quot;, simplify = T) %&gt;%
+  as.vector()
+offer_attr</code></pre>
+<pre><code>## [1] &quot;2 rooms&quot; &quot;24m²&quot;    &quot;Floor 4&quot;</code></pre>
+<p>With a bit more parsing, we can get clean numbers.</p>
+<pre class="r"><code># Find floor data by finding the vector element
+# containing text &quot;Floor&quot; and isolating the
+# number next to it.
+floor &lt;- grep(&quot;Floor&quot;, offer_attr, value = T) %&gt;%
+  stringr::str_replace(&quot;Floor&quot;,&quot;&quot;) %&gt;%
+  stringr::str_trim()
+floor</code></pre>
+<pre><code>## [1] &quot;4&quot;</code></pre>
+<pre class="r"><code># Find surface area data by finding the vector 
+# element containing text &quot;m²&quot; and isolating the
+# number next to it.
+surface &lt;- grep(&quot;m²&quot;, offer_attr, value = T) %&gt;%
+  stringr::str_replace(&quot;m²&quot;,&quot;&quot;) %&gt;%
+  stringr::str_trim()
+surface</code></pre>
+<pre><code>## [1] &quot;24&quot;</code></pre>
+<p>However, if we look closely at the list of urls, there seem to be two types of URLs.</p>
+<pre class="r"><code>table(sub(&quot;(/.*/.*/).*&quot;,&quot;\\1&quot;,offers_urls)) %&gt;%
+  tibble::as_tibble() %&gt;%
+  setNames(c(&quot;URL start with:&quot;,&quot;n&quot;)) </code></pre>
+<pre><code>## # A tibble: 2 × 2
+##                    `URL start with:`     n
+##                                &lt;chr&gt; &lt;int&gt;
+## 1           /en/apartments-for-rent/    21
+## 2 /en/residential-property-for-rent/     7</code></pre>
+<p>Most URLs follow the pattern <code>/en/apartments-for-rent/&lt;address&gt;--&lt;id&gt;</code> but a few look like <code>/en/residential-property-for-rent/&lt;address&gt;--&lt;id&gt;</code>. If we open one, we can see that the page layout is different.</p>
+<div class="figure">
+<img src="/img/1704161-scrsh-msrvrn-property-source.png" alt="Screenshot of source code for residential detail webpage" />
+<p class="caption">Screenshot of source code for residential detail webpage</p>
+</div>
+<p>The surface area is still available in a node with <code>[itemprop=itemOffered]</code>, but the floor is in another node, which seem to be the first node with class <code>price</code>. With a bit of rewriting on the floor code, we can adapt to the 2 different layouts:</p>
+<pre class="r"><code># The code below can find the floor on both layout types,
+# which are identified by a pattern in their url.
+floor &lt;- ifelse(
+    grepl(&quot;apartments&quot;, offer_url),
+    grep(&quot;Floor&quot;, offer_attr, value = T),
+    offer_html %&gt;% 
+      html_node(&quot;.price&quot;) %&gt;%
+      html_text()) %&gt;%
+  stringr::str_replace(&quot;Floor[:]{0,1}&quot;,&quot;&quot;) %&gt;%
+  stringr::str_trim() %&gt;%
+  as.numeric()</code></pre>
+</div>
+<div id="scraping-all-links-with-reusable-code" class="section level3">
+<h3>Scraping all links with reusable code</h3>
+<p>We can now put all our code together in a function and use it on each link. Note that the <code>slow_scrape_extra_info</code> wrapper just make sure we wait for a little while between each request.</p>
+<pre class="r"><code>scrape_extra_info &lt;- function(offer_url) {
+  BASE_URL &lt;- &quot;https://www.moservernet.ch&quot;
+  offer_full_url &lt;- paste0(BASE_URL, offer_url)
+  offer_html &lt;- xml2::read_html(offer_full_url)
+  
+  offer_attr &lt;- offer_html %&gt;%
+    html_node(&quot;[itemprop=itemOffered]&quot;) %&gt;%
+    html_text() %&gt;%
+    stringr::str_trim() %&gt;%
+    stringr::str_split(&quot; - &quot;, simplify = T) %&gt;%
+    as.vector()
+
+  list(
+    id = offer_url %&gt;%
+      sub(&quot;.*([0-9]{4}\\.[0-9]{2}\\.[0-9]{4}).*&quot;,
+        &quot;\\1&quot;, .),
+    
+     floor = ifelse(
+         grepl(&quot;apartments&quot;, offer_url),
+         grep(&quot;Floor&quot;, offer_attr, value = T),
+         offer_html %&gt;% 
+           html_node(&quot;.price&quot;) %&gt;%
+           html_text()) %&gt;%
+       stringr::str_replace(&quot;Floor[:]{0,1}&quot;,&quot;&quot;) %&gt;%
+       stringr::str_trim() %&gt;%
+       as.numeric(),
+  
+     surface = grep(&quot;m²&quot;, offer_attr, value = T) %&gt;%
+       stringr::str_replace(&quot;m²&quot;,&quot;&quot;) %&gt;%
+       stringr::str_trim() %&gt;%
+       as.numeric()
+  )
+}
+
+slow_scrape_extra_info &lt;- function(offer_url) {
+  Sys.sleep(sample(1:15/10,1))
+  scrape_extra_info(offer_url)
+}
+
+# Apply the function to each url that contains an offer id
+# and store the results into a single dataframe
+extra_info &lt;- grep(&quot;.*([0-9]{4}\\.[0-9]{2}\\.[0-9]{4}).*&quot;,
+                   offers_urls, value = T) %&gt;%
+  purrr::map(slow_scrape_extra_info) %&gt;%
+  dplyr::bind_rows() %&gt;%
+  na.omit()
+
+knitr::kable(head(extra_info))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">id</th>
+<th align="right">floor</th>
+<th align="right">surface</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">2454.44.0030</td>
+<td align="right">4</td>
+<td align="right">24</td>
+</tr>
+<tr class="even">
+<td align="left">2040.41.0020</td>
+<td align="right">1</td>
+<td align="right">44</td>
+</tr>
+<tr class="odd">
+<td align="left">2066.41.0010</td>
+<td align="right">1</td>
+<td align="right">48</td>
+</tr>
+<tr class="even">
+<td align="left">0510.45.0030</td>
+<td align="right">5</td>
+<td align="right">55</td>
+</tr>
+<tr class="odd">
+<td align="left">2457.41.0020</td>
+<td align="right">1</td>
+<td align="right">50</td>
+</tr>
+<tr class="even">
+<td align="left">2018.48.0020</td>
+<td align="right">8</td>
+<td align="right">58</td>
+</tr>
+</tbody>
+</table>
+<p>Thanks to the common <code>id</code> field, we can <a href="http://dplyr.tidyverse.org/reference/join.html">join</a> this dataframe with the one obtained in the <a href="https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/">previous post</a>.</p>
+</div>
+</div>

@@ -1,0 +1,460 @@
+---
+title: "Testing Flask SQLAlchemy database with pytest"
+author: "Xavier Adam"
+date: "2017-07-03"
+categories: ["python"]
+tags: ["python", "flask", "pytest", "flask-sqlalchemy"]
+---
+## Introduction
+[Early in the tutorial](http://testdriven.io/part-one-test-setup/), the author explains how to set up your app to use [`unittest`](https://docs.python.org/3/library/unittest.html) and the [`Flask-Testing`](https://github.com/jarus/flask-testing) extension for its test framework. Since I wanted to use [`pytest`](https://docs.pytest.org/en/latest/), this was a good opportunity to explore the test setup a bit more in depth.
+
+## Running pytest from a script
+
+Firstly, add `pytest` to your `requirements.txt` and place a dummy test in the `project/tests`.
+
+```{python, eval=FALSE}
+def test_dummy():
+    assert True
+```
+
+Secondly, add a `manager.command` to `manage.py` that run the pytest tests.
+
+```{python, eval=FALSE}
+# manage.py
+import pytest
+@manager.command
+def test():
+    """Runs the tests."""
+    pytest.main(["-s", "project/tests"])
+```
+
+Some notes:
+- To find info on calling pytest directly from python code, go [here](https://docs.pytest.org/en/latest/usage.html#calling-pytest-from-python-code)
+- I first tried to just run `pytest.main()` and ended up with some "File not found" error. You need to provide an empty list `[]` at the very least. The error is discussed more in depth [here](https://github.com/pytest-dev/pytest/issues/1110). 
+- Running `pytest.main([])` with an empty list will look for test everywhere in your project. If you have placed the `env` dir in `/project`, with all the sources of your virtual environment packages, you might find tons of tests that you did not want to touch. Therefore, it's better to target specifically the `project/tests` dir with the last argument `project/tests`.
+- Adding `-s` to the pytest command lets pytest print to the console any print statements that you use in your tests, not just the ones from failing tests.
+
+We can now run the test on the running containers with:
+
+```{bash, eval=FALSE}
+$ docker-compose run users-service python manage.py test 
+
+== test session starts ==
+platform linux -- Python 3.6.1, pytest-3.1.2, py-1.4.34, pluggy-0.4.0
+rootdir: /usr/src/app, inifile:
+collected 1 items 
+
+project/tests/test_ping.py .
+
+== 1 passed in 0.01 seconds ==
+```
+
+## Creating an app fixture
+
+In the tutorial, the author creates the class `BaseTestCase` in `project/tests/base.py`, which imports the `app` from `project`. 
+
+```{python, eval=FALSE}
+# http://testdriven.io/part-one-test-setup/
+# project/tests/base.py 
+[...]
+from project import app, db
+
+
+class BaseTestCase(TestCase):
+    def create_app(self):
+        app.config.from_object('project.config.TestingConfig')
+        return app
+[...]
+```
+
+This `app` instance can then be used in our different tests, without needing to reimport the app for each test. At the beginning of its `project/tests/test_users.py`, you can see that the class `TestUserService` inherits from `BaseTestCase`. 
+
+```{python, eval=FALSE}
+# http://testdriven.io/part-one-test-setup/
+# project/tests/test_users.py 
+[...]
+from project.tests.base import BaseTestCase
+
+
+class TestUserService(BaseTestCase):
+[...]
+```
+
+Reusable objects for tests are called fixtures. In `unittest`, fixtures are defined as classes with two special functions `setUp` and `tearDown`, that are [executed before/after each test](https://docs.python.org/3/library/unittest.html#organizing-test-code). 
+https://docs.pytest.org/en/latest/fixture.html). We will cover their pytest implementations later.
+
+Rather than importing the app, we will first move the code to the [Application Factories pattern](http://flask.pocoo.org/docs/0.12/patterns/appfactories/) (also used in the tutorial [soon after](http://testdriven.io/part-one-flask-blueprints/)). Rewrite your `project/__init__.py` as below:
+
+```{python, eval=FALSE}
+# project/__init__.py
+import os
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+
+db = SQLAlchemy()
+
+
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(128), nullable=False)
+    active = db.Column(db.Boolean(), default=False, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    def __init__(self, username, email):
+        self.username = username
+        self.email = email
+        self.created_at = datetime.datetime.now()
+
+
+def create_app():
+    app = Flask(__name__)
+
+    app_settings = os.getenv('APP_SETTINGS')
+    app.config.from_object(app_settings)
+
+    db.init_app(app)
+
+    @app.route('/ping', methods=['GET'])
+    def ping_pong():
+        return jsonify({
+            'status': 'Epic success',
+            'message': 'pong!'
+        })
+
+    return app
+```
+
+We now have a `create_app()` function, that can return an `app` instance. In pytest, fixture are defined as function, with the `@pytest.fixture` decorator.
+
+```{python, eval=FALSE}
+# project/tests/conftest.py
+import pytest
+from project import create_app
+
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.from_object('project.config.TestingConfig')
+    return app
+```
+
+Tests in pytest are also just function, named with the prefix `test_`. To use a fixture in a test, just add it as an argument. Note that assertions are simpler than in unittest, you only need the `assert` function.
+
+Test the different configurations:
+
+```{python, eval=FALSE}
+# project/tests/test_config.py
+import os
+
+
+def test_development_config(app):
+    app.config.from_object('project.config.DevelopmentConfig')
+    assert app.config['DEBUG']
+    assert not app.config['TESTING']
+    assert app.config['SQLALCHEMY_DATABASE_URI'] == os.environ.get(
+        'DATABASE_URL')
+
+
+def test_testing_config(app):
+    app.config.from_object('project.config.TestingConfig')
+    assert app.config['DEBUG']
+    assert app.config['TESTING']
+    assert not app.config['PRESERVE_CONTEXT_ON_EXCEPTION']
+    assert app.config['SQLALCHEMY_DATABASE_URI'] == os.environ.get(
+        'DATABASE_TEST_URL')
+
+
+def test_production_config(app):
+    app.config.from_object('project.config.ProductionConfig')
+    assert not app.config['DEBUG']
+    assert not app.config['TESTING']
+    assert app.config['SQLALCHEMY_DATABASE_URI'] == os.environ.get(
+        'DATABASE_URL')
+```
+
+Testing the ping route (using [`test_client()`](http://flask.pocoo.org/docs/0.12/api/#flask.Flask.test_client) to get a `client` that can test routes):
+
+```{python, eval=FALSE}
+# project/tests/test_ping.py
+import json
+
+
+def test_ping(app):
+    client = app.test_client()
+    resp = client.get('/ping')
+    data = json.loads(resp.data.decode())
+    assert resp.status_code == 200
+    assert 'pong' in data['message']
+    assert 'success' in data['status']
+```
+
+## Accessing the database from the tests
+### Making tables accessible with `create_all()`
+So far we haven't put any code related to the database in our `app` fixture. The tutorial has done so in `BaseTestCase`. If we rewrite the [`test_add_user`](http://testdriven.io/part-one-restful-routes/) for pytest and try to run it, we get an error.
+
+```{python, eval=FALSE}
+# project/tests/test_users.py
+def test_add_user(app):
+    """Ensure a new user can be added to the database."""
+    with app.test_client() as client:
+        response = client.post(
+            '/users',
+            data=json.dumps(dict(
+                username='michael',
+                email='michael@realpython.com'
+            )),
+            content_type='application/json',
+        )
+        data = json.loads(response.data.decode())
+        assert response.status_code == 201
+        assert 'michael@realpython.com was added!' in data['message']
+        assert 'success' in data['status']
+```
+
+```{bash, eval=FALSE}
+$ docker-compose run users-service python manage.py test_app
+[...]
+======= FAILURES ======
+____ test_add_user ____
+[...]
+sqlalchemy.exc.ProgrammingError: (psycopg2.ProgrammingError) relation "users" does not exist
+```
+
+So our app fixture knows about sql alchemy but hasn't created the tables needed for our user model. From the [Flask-SQLAlchemy documentation](http://flask-sqlalchemy.pocoo.org/2.1/contexts/):
+
+> What it (init_db) does is prepare the application to work with SQLAlchemy. However that does not now bind the SQLAlchemy object to your application.
+
+Let's jump in an python shell and try to see how we can bind our `db` object to our `app`.
+
+```{python, eval=FALSE}
+$ docker exec -ti users-service bash
+root@910656bc5f75:/usr/src/app# python3
+>>> from project import create_app, db
+>>> app = create_app()
+>>> app
+<Flask 'project'>
+>>> db
+<SQLAlchemy engine=None>
+```
+
+So `create_app()` gives us an app object, but the imported `db` isn't connected to it out-of-the-box (it has no engine). If we jump into the [app context](http://flask-sqlalchemy.pocoo.org/2.1/contexts/), the engine gets populated.
+
+```{python, eval=FALSE}
+>>> app_ctx = app.app_context()
+>>> app_ctx.push()  # jump into the app context
+>>> db
+<SQLAlchemy engine='postgres://postgres:postgres@users-db:5432/users_dev'>
+```
+
+However, `db` still doesn't have tables and running tests at this stage would keep saying that `relation users does not exist`. That's why we need `create_table()`.
+
+```{python, eval=FALSE}
+>>> db.engine.table_names()  # Check the tables currently on the engine
+[]                           # no table found
+>>> db.create_all()          # Create the tables according to defined models
+>>> db.engine.table_names()
+['users']                    # Now table 'users' is found
+```
+
+We can now update our `app` fixture:
+
+```{python, eval=FALSE}
+# project/tests/conftest.py
+import pytest
+from project import create_app, db
+
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.from_object('project.config.TestingConfig')
+    with app.app_context():   
+        # alternative pattern to app.app_context().push()
+        # all commands indented under 'with' are run in the app context 
+        db.create_all()
+        return app
+```
+
+
+### Cleaning database with `drop_all()`
+Let's check the impact of our tests on the database. Before running tests:
+
+```{bash, eval=FALSE}
+$ docker exec -ti $(docker ps -aqf "name=users-db") psql -U postgres
+
+psql (9.6.3)
+postgres=# \c users_dev
+You are now connected to database "users_dev" as user "postgres".
+users_dev=# \dt
+No relations found.
+users_dev=# \c users_test
+You are now connected to database "users_test" as user "postgres".
+users_test=# \dt
+No relations found.
+```
+
+After running tests:
+
+```{bash, eval=FALSE}
+# Running pytest
+$ docker-compose run users-service python manage.py test_app
+[... Output of pytest ...]
+========= 5 passed in 0.17 seconds =========
+
+# Checking the database
+$ docker exec -ti $(docker ps -aqf "name=users-db") psql -U postgres
+
+psql (9.6.3)
+postgres=# \c users_dev
+You are now connected to database "users_dev" as user "postgres".
+users_dev=# \dt
+No relations found.
+users_dev=# \c users_test
+You are now connected to database "users_test" as user "postgres".
+users_test=# \dt
+users_test=# \dt
+         List of relations
+ Schema | Name  | Type  |  Owner   
+--------+-------+-------+----------
+ public | users | table | postgres
+(1 row)
+
+users_test=# SELECT * FROM users;
+ id | username |         email          | active |         created_at         
+----+----------+------------------------+--------+----------------------------
+  1 | michael  | michael@realpython.com | f      | 2017-07-04 09:23:43.34457
+```
+
+We can see that the users table was successfully created in the `users_test` database, which we selected in `conftest.py`. A user was also successfully inserted. However, if we run the tests again and recheck the table, we can see how trouble is starting to creep in:
+
+```{bash, eval=FALSE}
+# Running test 
+[...]
+
+# Checking the database
+[...]
+users_test=# SELECT * FROM users;
+ id | username |         email          | active |         created_at         
+----+----------+------------------------+--------+----------------------------
+  1 | michael  | michael@realpython.com | f      | 2017-07-04 09:23:43.34457
+  2 | michael  | michael@realpython.com | f      | 2017-07-04 09:24:55.972571
+(2 rows)
+```
+
+We are not cleaning up the database after our tests. To do so, we need to add `drop_all()` as a tear-down action for our app fixture (after `yield`). This will not only empty the table rows, but also delete the table itself:
+
+```{python, eval=FALSE}
+# project/tests/conftest.py
+import pytest
+from project import create_app, db
+
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.from_object('project.config.TestingConfig')
+    with app.app_context():   
+        db.create_all()
+        yield app   # Note that we changed return for yield, see below for why
+        db.drop_all()
+```
+
+For the first time, we added a command (`db.drop_all()`) that needed to be executed after the test using the fixture. Previously we used `return` to get the app out of the fixture. But using `return` means ending the function. That's where `yield` comes to the rescue. Unlike `unittest`, `pytest` does not put setup and teardown code in dedicated function. Everything that comes before `return`/`yield` is setup code, everything that comes after `yield` is teardown code. Documentation is [here](https://docs.pytest.org/en/latest/fixture.html#fixture-finalization-executing-teardown-code):
+
+> By using a yield statement instead of return, all the code after the yield statement serves as the teardown code.
+
+If you try to run tests again, you will see that the database is left clean.
+
+### Avoid locking postgres with `db.session.remove()`
+This is the part I still have trouble understanding. Using the fixture above, `pytest` started hanging indefinitely at random test (usually at tests that touched the database several times, but not always). When it happened, I could not even stop `pytest` and had to restart the container.
+
+```{bash, eval=FALSE}
+$ docker-compose run users-service python manage.py test_app
+===== test session starts =====
+[...]
+project/tests/test_configs.py ...
+project/tests/test_users.py ..
+
+hanging... hanging... hanging...
+```
+
+
+From this [SO question](https://stackoverflow.com/questions/26350911/what-to-do-when-a-py-test-hangs-silently), I got the confirmation that postgres might be locked. Using [the commands listed on  devopsderek.com](https://www.devopsderek.com/blog/2012/11/13/list-and-disconnect-postgresql-db-sessions/), it is possible to look at the sessions active while pytest is locked. Below we can see that one is blocked with the state ["idle in transaction"](https://stackoverflow.com/questions/51019/what-does-it-mean-when-a-postgresql-process-is-idle-in-transaction).
+
+```{bash, eval=FALSE}
+# Checking the database while pytest is hanging
+$ docker exec -ti $(docker ps -aqf "name=users-db") psql -U postgres
+postgres=# SELECT * FROM pg_stat_activity;
+
+datid |  datname   | pid | ... | state               | ... | query
+------+------------+-----+-----+---------------------+-----+-
+[... lots of sessions ...]
+16386 | users_test | 200 | ... | idle in transaction | ... | SELECT users.id...
+```
+
+Killing the session manually in postgres did also kill `pytest` without needing to restart the container.
+
+```{bash, eval=FALSE}
+# Still in psql
+postgres=# SELECT pg_terminate_backend(200);
+ pg_terminate_backend 
+----------------------
+ t
+(1 row)
+```
+```{bash, eval=FALSE}
+# In the terminal running pytest
+psycopg2.OperationalError: terminating connection due to administrator command
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+$ # free to type again
+```
+
+Still following [SO advice](https://stackoverflow.com/questions/26350911/what-to-do-when-a-py-test-hangs-silently), you can explicitly close the connection after each test, which solves the issue.
+
+```{python, eval=FALSE}
+# project/tests/conftest.py
+import pytest
+from project import create_app, db
+
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.from_object('project.config.TestingConfig')
+    with app.app_context():   
+        db.create_all()
+        yield app  
+        db.session.remove()  # looks like db.session.close() would work as well
+        db.drop_all()
+```
+
+We end up very close to the [testdriven.io example](http://testdriven.io/part-one-test-setup/) for `unittest`. 
+
+```{python, eval=FALSE}
+# project/tests/base.py on http://testdriven.io/part-one-test-setup/
+from flask_testing import TestCase
+
+from project import app, db
+
+
+class BaseTestCase(TestCase):
+    def create_app(self):  # done in our pytest fixture before yield
+        app.config.from_object('project.config.TestingConfig')
+        return app
+        
+    def setUp(self):  # done in our pytest fixture before yield
+        db.create_all()
+        db.session.commit()
+
+    def tearDown(self): # done in our pytest fixture after yield
+        db.session.remove()
+        db.drop_all()
+```
+
+I just haven't found the reason why `db.session.commit()` would be necessary (although I suspect it might be an alternative to explicitely declaring the app context like we did in `with`). I will update the post when I understand it better.
