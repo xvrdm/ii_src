@@ -193,7 +193,10 @@ density <- url %>%
   html_node(xpath='//table[contains(@class,"wikitable")]') %>%
   html_table() %>%
   rename(Population=`Population[Note 2]`) %>%
-  mutate(Population=as.numeric(stringr::str_replace_all(Population, ",", ""))) %>%
+  # Remove comma and notes reference (digit between brackets)
+  mutate(Population=as.numeric(
+    stringr::str_replace_all(
+      Population, "(,|(\\[[:digit:]*\\]))", ""))) %>%
   filter(Code != "CH") %>%
   select(Code, Canton, Population)
 

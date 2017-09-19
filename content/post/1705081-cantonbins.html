@@ -190,7 +190,10 @@ density &lt;- url %&gt;%
   html_node(xpath=&#39;//table[contains(@class,&quot;wikitable&quot;)]&#39;) %&gt;%
   html_table() %&gt;%
   rename(Population=`Population[Note 2]`) %&gt;%
-  mutate(Population=as.numeric(stringr::str_replace_all(Population, &quot;,&quot;, &quot;&quot;))) %&gt;%
+  # Remove comma and notes reference (digit between brackets)
+  mutate(Population=as.numeric(
+    stringr::str_replace_all(
+      Population, &quot;(,|(\\[[:digit:]*\\]))&quot;, &quot;&quot;))) %&gt;%
   filter(Code != &quot;CH&quot;) %&gt;%
   select(Code, Canton, Population)
 
@@ -200,7 +203,7 @@ DT::datatable(
   rownames = FALSE,
   caption = &quot;Table 1 : Subset of wikipedia data for cantons.&quot;)</code></pre>
 <div id="htmlwidget-1" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-1">{"x":{"filter":"none","caption":"<caption>Table 1 : Subset of wikipedia data for cantons.<\/caption>","data":[["ZH","BE","LU","UR","SZ","OW","NW","GL","ZG","FR","SO","BS","BL","SH","AR","AI","SG","GR","AG","TG","TI","VD","VS","NE","GE","JU"],["Zürich","Bern","Luzern","Uri","Schwyz","Obwalden","Nidwalden","Glarus","Zug","Fribourg","Solothurn","Basel-Stadt","Basel-Landschaft","Schaffhausen","Appenzell Ausserrhoden","Appenzell Innerrhoden","St. Gallen","Graubünden","Aargau","Thurgau","Ticino","Vaud","Valais","Neuchâtel","Geneva","Jura"],[1463459,1017483,398762,35973,154093,37076,42420,40028,122134,307461,266418,198290,285094,79836,54543,15974,499065,196610,653675,267429,351946,773407,335696,178107,484736,72782]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Code<\/th>\n      <th>Canton<\/th>\n      <th>Population<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"dom":"tpi","columnDefs":[{"className":"dt-right","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"filter":"none","caption":"<caption>Table 1 : Subset of wikipedia data for cantons.<\/caption>","data":[["ZH","BE","LU","UR","SZ","OW","NW","GL","ZG","FR","SO","BS","BL","SH","AR","AI","SG","GR","AG","TG","TI","VD","VS","NE","GE","JU"],["Zürich","Bern","Luzern","Uri","Schwyz","Obwalden","Nidwalden","Glarus","Zug","Fribourg","Solothurn","Basel-Stadt","Basel-Landschaft","Schaffhausen","Appenzell Ausserrhoden","Appenzell Innerrhoden","St. Gallen","Graubünden","Aargau","Thurgau","Ticino","Vaud","Valais","Neuchâtel","Geneva","Jura"],[1487969,1026513,403397,36145,155863,37378,42556,40147,123948,311914,269441,198249,286848,80769,54954,16003,502552,197550,663462,270709,354375,784822,339176,178567,489524,73122]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Code<\/th>\n      <th>Canton<\/th>\n      <th>Population<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"dom":"tpi","columnDefs":[{"className":"dt-right","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 <p>We can now try the <code>cantonbins</code> function.</p>
 <pre class="r"><code>cantonbins(density, canton_col=&quot;Code&quot;, value_col=&quot;Population&quot;,
            plot_title=&quot;Population size in Swiss Cantons&quot;,
