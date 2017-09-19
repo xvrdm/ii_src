@@ -49,11 +49,30 @@ Empty? It looks like the count is actually populated by a tiny bit of javascript
 - "spin and interact with a headless browser": create a virtual browser (we won't see it, it happens in the background) that will browse/render the page and give us back it's content (including the javascript generated content). "Splash" is one these headless browsers, but you might have heard of another one named "phantomJS".
 - "in a docker container": think of docker is a way to easily run lightweight virtual machines (called container). So rather than installing splash and all its python dependencies, we will run a virtual machine with splash installed in it and destroy it when we are done, leaving our main system untouched.
 
-Installing docker is beyond the scope of this post, but there are tons of ressource online. At the time of this writing, to install `splashr` and `harbor` (the package that manages docker from R), you need to grab them from github.
+Installing docker is beyond the scope of this post, but there are tons of ressource online. At the time of this writing, to install [`splashr`](https://github.com/hrbrmstr/splashr) and [`docker`](https://github.com/bhaskarvk/docker) (the package that manages docker from R), you need to grab them from github.
+
+The github page of [`docker`](https://github.com/bhaskarvk/docker) (the R package) explains how to install the python package [`docker`](https://docker-py.readthedocs.io/en/stable/). Yes, you read that well: in order to use [`splash`](http://splash.readthedocs.io) (the scrapping python lib),  [`splashr`](https://github.com/hrbrmstr/[splashr) uses:
+
+- [`docker`](https://github.com/bhaskarvk/docker) (the R package), 
+    - which uses [`docker`](https://docker-py.readthedocs.io/en/stable/) (the python lib installed in a virtualenv named `docker`), 
+        - which uses [`docker`](https://www.docker.com/) (the container engine).
+
+So proceed in steps:
+
+1. Install [`docker`](https://www.docker.com/) (the engine)
+2. Install [`docker`](https://docker-py.readthedocs.io/en/stable/) (the python lib) in a virtualenv like explained [here](https://github.com/bhaskarvk/docker)
+3. Install the R packages
 
 ```
-devtools::install_github("wch/harbor")
+devtools::install_github("bhaskarvk/docker")
 devtools::install_github("hrbrmstr/splashr")
+```
+
+4. Let RStudio know that you want python commands to be run in this virtualenv
+
+```{r}
+# Use the path where you installed the docker venv
+reticulate::use_virtualenv("~/dev/virtualenvs/docker", required=T)
 ```
 
 The very first time we run `splashr`, it might be a bit slow: it will have to download the docker image (the template used to create container) that has `Splash` installed in it. The image is documented [here](https://hub.docker.com/r/hrbrmstr/splashttpd/).
