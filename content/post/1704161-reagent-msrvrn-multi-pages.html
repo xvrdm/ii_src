@@ -40,25 +40,25 @@ offers_urls &lt;- offers %&gt;%
   html_attr(&quot;href&quot;)
 
 head(offers_urls)</code></pre>
-<pre><code>## [1] &quot;/en/apartments-for-rent/paquis-2-rooms--2454.44.0030&quot;          
-## [2] &quot;/en/apartments-for-rent/plainpalais-2-rooms--2040.41.0020&quot;     
-## [3] &quot;/en/apartments-for-rent/saint-jean-3-5-rooms--2066.41.0010&quot;    
-## [4] &quot;/en/apartments-for-rent/grand-pre-3-rooms--0510.45.0030&quot;       
-## [5] &quot;/en/apartments-for-rent/grand-pre-1-5-rooms--2457.41.0020&quot;     
-## [6] &quot;/en/apartments-for-rent/grand-saconnex-2-5-rooms--2018.48.0020&quot;</code></pre>
+<pre><code>## [1] &quot;/en/apartments-for-rent/servette-2-rooms--0014.45.0020&quot;         
+## [2] &quot;/en/apartments-for-rent/acacias-1-5-rooms--0141.42.0040&quot;        
+## [3] &quot;/en/apartments-for-rent/petit-lancy-1-5-rooms--7124.61.0020&quot;    
+## [4] &quot;/en/apartments-for-rent/servette-2-rooms--2078.40.0030&quot;         
+## [5] &quot;/en/apartments-for-rent/plainpalais-2-rooms--0008.46.0010&quot;      
+## [6] &quot;/en/apartments-for-rent/chene-bougeries-2-5-rooms--0199.41.0010&quot;</code></pre>
 </div>
 <div id="using-one-example-to-map-our-scraping" class="section level3">
 <h3>Using one example to map our scraping</h3>
 <p>Using the first link as an example, we can explore how the data should be scraped.</p>
 <pre class="r"><code>offer_url &lt;- offers_urls[1]
 offer_url</code></pre>
-<pre><code>## [1] &quot;/en/apartments-for-rent/paquis-2-rooms--2454.44.0030&quot;</code></pre>
+<pre><code>## [1] &quot;/en/apartments-for-rent/servette-2-rooms--0014.45.0020&quot;</code></pre>
 <p>The id of each offer is actually available directly in the URL.</p>
 <pre class="r"><code>id &lt;- offer_url %&gt;%
   sub(&quot;.*([0-9]{4}\\.[0-9]{2}\\.[0-9]{4}).*&quot;,
       &quot;\\1&quot;, .)
 id</code></pre>
-<pre><code>## [1] &quot;2454.44.0030&quot;</code></pre>
+<pre><code>## [1] &quot;0014.45.0020&quot;</code></pre>
 <p>Next we need to scrape the data contained at this URL. As links are relative, we start by rebuilding the full link, which we use with <code>xml2::read_html()</code>.</p>
 <pre class="r"><code># Create full URL for offer
 BASE_URL &lt;- &quot;https://www.moservernet.ch&quot;
@@ -78,7 +78,7 @@ offer_html &lt;- xml2::read_html(offer_full_url)</code></pre>
   stringr::str_split(&quot; - &quot;, simplify = T) %&gt;%
   as.vector()
 offer_attr</code></pre>
-<pre><code>## [1] &quot;2 rooms&quot; &quot;24m²&quot;    &quot;Floor 4&quot;</code></pre>
+<pre><code>## [1] &quot;2 rooms&quot; &quot;30m²&quot;    &quot;Floor 5&quot;</code></pre>
 <p>With a bit more parsing, we can get clean numbers.</p>
 <pre class="r"><code># Find floor data by finding the vector element
 # containing text &quot;Floor&quot; and isolating the
@@ -87,7 +87,7 @@ floor &lt;- grep(&quot;Floor&quot;, offer_attr, value = T) %&gt;%
   stringr::str_replace(&quot;Floor&quot;,&quot;&quot;) %&gt;%
   stringr::str_trim()
 floor</code></pre>
-<pre><code>## [1] &quot;4&quot;</code></pre>
+<pre><code>## [1] &quot;5&quot;</code></pre>
 <pre class="r"><code># Find surface area data by finding the vector 
 # element containing text &quot;m²&quot; and isolating the
 # number next to it.
@@ -95,16 +95,16 @@ surface &lt;- grep(&quot;m²&quot;, offer_attr, value = T) %&gt;%
   stringr::str_replace(&quot;m²&quot;,&quot;&quot;) %&gt;%
   stringr::str_trim()
 surface</code></pre>
-<pre><code>## [1] &quot;24&quot;</code></pre>
+<pre><code>## [1] &quot;30&quot;</code></pre>
 <p>However, if we look closely at the list of urls, there seem to be two types of URLs.</p>
 <pre class="r"><code>table(sub(&quot;(/.*/.*/).*&quot;,&quot;\\1&quot;,offers_urls)) %&gt;%
   tibble::as_tibble() %&gt;%
   setNames(c(&quot;URL start with:&quot;,&quot;n&quot;)) </code></pre>
-<pre><code>## # A tibble: 2 × 2
+<pre><code>## # A tibble: 2 x 2
 ##                    `URL start with:`     n
 ##                                &lt;chr&gt; &lt;int&gt;
-## 1           /en/apartments-for-rent/    21
-## 2 /en/residential-property-for-rent/     7</code></pre>
+## 1           /en/apartments-for-rent/    27
+## 2 /en/residential-property-for-rent/     6</code></pre>
 <p>Most URLs follow the pattern <code>/en/apartments-for-rent/&lt;address&gt;--&lt;id&gt;</code> but a few look like <code>/en/residential-property-for-rent/&lt;address&gt;--&lt;id&gt;</code>. If we open one, we can see that the page layout is different.</p>
 <div class="figure">
 <img src="/img/1704161-scrsh-msrvrn-property-source.png" alt="Screenshot of source code for residential detail webpage" />
