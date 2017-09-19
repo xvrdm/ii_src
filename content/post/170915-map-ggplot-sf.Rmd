@@ -1,0 +1,479 @@
+---
+title: "Create maps from SITG files with sf and ggplot2"
+author: "Xavier Adam"
+date: "2017-09-15"
+categories: ["R"]
+tags: ["R","RMarkdown","map", "shape", "sf", "ggplot2", "rmapshaper"]
+---
+## Introduction
+
+In Geneva (Switzerland), we are lucky to have [SITG](http://ge.ch/sitg/sitg_catalog/sitg_donnees?keyword&distribution=3&datatype=tous&topic=tous&service=tous), a website with tons of geographical open datasets. I wanted to try my hand at doing maps in R for some time now, but could not find a way that felt integrated with the other packages I usually work with. Importing [`.sh`](https://en.wikipedia.org/wiki/Shapefile) files was a challenge (for me), as well as plotting the data in [`ggplot2`](http://ggplot2.tidyverse.org/) rather than with a dedicated map library like [`tmap`](https://cran.r-project.org/web/packages/tmap/vignettes/tmap-nutshell.html).
+
+All that changed with [`sf`](http://r-spatial.github.io/sf/), a package that implements [Simple Features](https://en.wikipedia.org/wiki/Simple_Features) for R. Full disclaimer: I know nothing about geographic information systems. All I can say is: if you are already using the [`tidyverse`](https://www.tidyverse.org/), `sf` makes it really straightforward to convert geographical datasets to `data.frames/tibbles` that you can then manipulate with your usual toolbox (`dplyr`, `tidyr`...). To learn more about the ecosystem of R packages for geocomputation, you could do worse than start [here](http://robinlovelace.net/geocompr/intro.html#rs-spatial-ecosystem).
+
+As I walked around Geneva countryside, I stumbled upon a [point of view](https://www.google.ch/maps/@46.1683766,6.068557,3a,75y,96.05h,82.7t/data=!3m8!1e1!3m6!1sAF1QipM5sKEBi_Ci70-Tl8I8cabW9Tu2rFtkiXDWLGUU!2e10!3e11!6shttps:%2F%2Flh5.googleusercontent.com%2Fp%2FAF1QipM5sKEBi_Ci70-Tl8I8cabW9Tu2rFtkiXDWLGUU%3Dw203-h100-k-no-pi-0-ya8.500008-ro-0-fo100!7i8704!8i4352?hl=en) with several information boards. One showed a little map that I thought would make a good first example.
+
+![Land use in Geneva, Switzerland](/img/170915-photo-map-ggplot-sf.jpeg)
+
+## Installing sf
+
+If you already have all dependencies, it might be as straightforward as installing the package `sf`. On Ubuntu, it was a bit of a pain, especially because I did not read the [instructions first](https://github.com/r-spatial/sf#linux). After adding `libpng-dev` on top of the other libraries, the `sf` install worked in RStudio.
+
+## Planning the map
+
+Thinking in layers - like always with `ggplot2` - it looks like we need the following things:
+1. borders of each communal districts in Geneva 
+2. borders of water (lake and main rivers)
+3. areas of buildings
+4. areas of forests
+5. areas of agricultural fields
+
+## Mapping communal districts
+
+The polygons of all Geneva communal districts are available [here, named 'COMMUNES GENEVOISES (GEOMETRIE SIMPLIFIEE)'](http://ge.ch/sitg/sitg_catalog/sitg_donnees?keyword=COMMUNES%20GENEVOISES%20%28GEOMETRIE%20SIMPLIFIEE%29&topic=tous&service=tous&datatype=tous&distribution=3&sort=auto))". I downloaded the `SHP` version. Make sure you place all the files (not just the `.shp` and `.shx`) in the same directory.`.shp` and `.shx` are enough to get the polygones, but you would miss all the metadata (like the names of the communes). Using `sf` function `st_read`, we can import them into R.
+
+
+```{r}
+# Load sf and dplyr quietly
+suppressMessages(library(sf))
+suppressMessages(library(dplyr))
+
+# Load the communes dataset
+communes  <- st_read("../data/GEO_COMMUNES_GE_SIMPLIFIEES.shp")
+```
+
+We can see that the file was successfully loaded, and that we have 48 geometry (of type `MULTIPOLYGON`) with 7 columns.
+
+Our usual dataframe functions (`dim`, `names`...) work on the `sf` object. With `glimpse` from `dplyr`, we can get a sense of what each column contains (e.g `COMMUNE` has the names of communes).
+
+```{r}
+# a glimpse at the column content
+glimpse(communes)
+```
+
+The `dplyr` verbs are also available. So you can `filter`, `rename`, `mutate`... and always get back a `sf` object.
+
+```{r}
+# Filter to see only commune "Carouge"
+communes %>% filter(COMMUNE == "Carouge") %>% head
+```
+
+```{r}
+# Filter to see only communes with "Genève" in their name
+communes %>% filter(grepl("^genève", COMMUNE, ignore.case=T)) %>% head
+```
+
+```{r}
+# Select only COMMUNE column (note that geometry is kept)
+# I also had to use select.sf rather than the generic select
+communes %>% select.sf(COMMUNE) %>% head
+```
+
+```{r}
+# Mutate names to lowercase
+communes %>% 
+  mutate(COMMUNE = stringr::str_to_lower(COMMUNE)) %>% 
+  head
+```
+
+To learn more about applying `dplyr` verbs to `sf` objects, see [this article from the documentation](https://r-spatial.github.io/sf/reference/dplyr.html) and [Strimas blog post](http://strimas.com/r/tidy-sf/).
+
+To map the polygons, there is now a dedicated geom `geom_sf` in `ggplot2`. This makes mapping geo areas as simple as lines (`geom_line`) or points (`geom_point`). Note that, at this stage, you need the development version of `ggplot2`.
+
+```{r}
+# if you don't have the development version
+# install.packages("devtools")
+# devtools::install_github("tidyverse/ggplot2")
+library(ggplot2)
+
+# Create a plot
+ggplot() + 
+  # add a layer with lightgrey communal polygons
+  geom_sf(data=communes) + 
+  # add a title
+  labs(title="Communals districts of Geneva")
+```
+
+`geom_sf` accepts styling arguments: `fill` for the color inside the polygons, `color` for the color of the polygons borders.
+
+```{r}
+ggplot() + 
+  geom_sf(data=communes, fill="darkred", color="gold") + 
+  labs(title="Communals districts of Geneva")
+```
+Great! But here we notice something surprising: districts don't overlap the lake, but they do overlap the rivers. Let'see how we can fix this.
+
+## Removing rivers
+
+The polygons of Geneva lake and main rivers (Rhône and Arve) are available [here, named 'EMPRISE DU LAC LEMAN (Petit-lac)'](http://ge.ch/sitg/sitg_catalog/sitg_donnees?keyword=petit%20lac&topic=tous&service=tous&datatype=tous&distribution=3&sort=auto). We can load them with `st_read` again.
+
+```{r}
+waters <- st_read("../data/GEO_LAC.shp")
+glimpse(waters)
+```
+
+There are only 3 geometries: Léman (the lake), Arve and Rhône (the main rivers). Let's see what they looks like:
+
+```{r}
+# Create a plot
+ggplot() + 
+  # add a layer with blue water polygons
+  geom_sf(data=waters) + 
+  # add a title
+  labs(title="Lake and rivers of Geneva")
+```
+
+Using `dplyr` again, let's filter to see only the rivers.
+
+```{r}
+# Create a plot
+ggplot() + 
+  # add a layer with blue water polygons
+  geom_sf(data= waters %>% filter(NOM != "Léman")) + 
+  # add a title
+  labs(title="Lake and rivers of Geneva")
+```
+
+We could map waters on top of the communes. But we could also explore geometry calculations and remove it from the commune shapes. The `sf` package has functions to combine polygon sets into new `sf` object. The functions are described in this [vignette](https://cran.r-project.org/web/packages/sf/vignettes/sf3.html). You can do things like union (`st_union`), intersection (`st_intersection`), difference (`st_difference`)... Here we will calculate the difference, which keeps everything but the intersection. 
+
+Note that we need to "group" the rivers, otherwise nothing will be removed since communes are never overlapped by both rivers in the same place. Below we apply:
+
+- `st_combine` to combine the two rivers in `waters` to a single multipolygon
+- `st_union` to convert the `st_combine` multipolygon to a normal polygon
+- `st_difference` to remove the `st_union` polygon from communes
+
+```{r}
+communes_no_water <- 
+  communes %>%
+    st_difference(st_union(st_combine(waters)))
+
+ggplot() +
+  geom_sf(data=communes_no_water) +
+  labs(title="Communes without rivers")
+```
+
+## Zoom on the map
+
+To check that rivers were correctly removed, we might want to "zoom" on the map. Playing with coordinates isn't something I understand well at all. It looks like along `geom_sf`, a dedicated coordinate function `coord_sf` was added to `ggplot2`, which lets us restrict coordinates. However, using limits in the axis unit (like `ylim(c(46.2,46.25))`) won't work. Even if latitude and longitude are displayed in this format on the axis, that's not the format of the undelying data. Let's see what the coordinates for the first polygon look like:
+
+```{r}
+communes_no_water %>%
+  select(geometry) %>%
+  slice(1) %>%
+  as.character()
+```
+
+Applying `coord_sf` with the right `datum` shows the original coordinate system on the map.
+
+```{r}
+ggplot() +
+  geom_sf(data=communes_no_water) +
+  labs(title="Communes without rivers") +
+  coord_sf(datum = st_crs(communes_no_water))
+```
+
+Using these numbers, we can define limits for our map.
+
+```{r}
+ggplot() +
+  geom_sf(data=communes_no_water) +
+  labs(title="Communes without rivers") +
+  # zooming on a smaller region
+  coord_sf(xlim=c(2490000,2505000), ylim=c(1115000,1125000))
+```
+
+## Simplify polygons
+
+The borders are too detailed for the schematic look we are after. To simplify polygons, we can use the `rmapshaper` package (on Ubuntu, I had to install dependencies [`libv8-dev`](https://github.com/ropensci/geojsonio/issues/65) and [`protolite`](https://github.com/jeroen/protolite)). `rmapshaper` lets us access the `mapshaper` javascript library, which provide tools to simplify and modify polygons. We will mainly use the simplify function `ms_simplify`. Arguments for `ms_simplify` are described in the [vignette](https://cran.r-project.org/web/packages/rmapshaper/vignettes/rmapshaper.html). 
+
+```{r}
+suppressMessages(library(rmapshaper))
+suppressMessages(library(gridExtra))
+
+communes_no_water_simplified <- 
+  communes_no_water %>%
+    ms_simplify(keep_shapes=T, keep=0.02)
+
+# using grid.arrange from gridExtra
+# we can plot the two version side by side
+chart_original <-
+  ggplot() + 
+    geom_sf(data=communes_no_water) +
+    labs(title="Original polygons",
+         subtitle="No ms_simplify")
+
+chart_simplified <-
+  ggplot() + 
+    geom_sf(data=communes_no_water_simplified) +
+    labs(title="Simplified polygons",
+         subtitle="ms_simplify at keep=0.02")
+
+grid.arrange(chart_original, chart_simplified, ncol=2)
+```
+
+## Map land use
+
+The polygons for building, forest and agricultural zones are available [here, named 'AGGLO - ZONES D'AFFECTATION SIMPLIFIEES DE L'AGGLOMERATION FRANCO-VALDO-GENEVOISE'](http://ge.ch/sitg/sitg_catalog/sitg_donnees?keyword=agglo%20zone%20simplifiee&topic=tous&service=tous&datatype=tous&distribution=3&sort=auto). We can load them with `st_read` again.
+
+```{r}
+zones <- st_read("../data/AGGLO_ZONE_AFF_SIMPLIFIEE.shp")
+glimpse(zones)
+```
+
+Lots of data is contained here. Among the variables, `LIBFVG` seems to contains the zone types. If we extract the column (encoded as factor), we can use `levels` to see unique values.
+
+```{r}
+zones$LIBFVG %>%
+  levels()
+```
+
+Let's isolate the building zones and add it as an additional `geom_sf` layer to our map (grey fill, no borders):
+
+```{r}
+building_zones <- c(
+    "Zone périurbaine à faible densité",
+    "Zone péricentrale à moyenne densité",
+    "Zone péricentrale à forte densité",
+    "Zone de centre village",
+    "Zone centrale à très forte densité",
+    "Zone de centre historique",                         
+    "Zone aéroportuaire"
+)
+
+ggplot() + 
+  geom_sf(data=communes_no_water_simplified) +
+  geom_sf(data=zones %>% filter(LIBFVG %in% building_zones),
+          fill="grey", color=NA)
+```
+
+First thing to note: the area covered by the `zones` polygons is way larger than our little Geneva canton. Previously we used `st_difference` to find the non-overlapping area. This time, let's use `st_intersection` to find overlapping area and "crop" the `zones` polygons to Geneva area. We will also slightly simplify the polygons with `ms_simplify`, so they don't look too detailled compared to our commune borders.
+
+```{r}
+buildings_geneva <-
+  zones %>%
+   filter(LIBFVG %in% building_zones) %>%
+   ms_simplify(keep_shapes = T, keep=0.0001) %>%
+   st_intersection(st_union(st_combine(communes_no_water_simplified)))
+
+ggplot() +
+  geom_sf(data=communes_no_water_simplified) +
+  geom_sf(data=buildings_geneva, fill="grey", color=NA)
+```
+
+To plot the borders of the communes above the building areas, we can call `geom_sf` twice rather than once. Remember that `ggplot` chart work as stack of layers, so each additional `geom` goes on top of the previous ones.
+
+```{r}
+# Create ggplot
+ggplot() +
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_no_water_simplified, color=NA) +
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons for communes, no fill, default border
+  geom_sf(data=communes_no_water_simplified, fill=NA) +
+  labs(title="Geneva communes and buildings")
+```
+
+Let's do the same with the forest areas. When I tried to use `st_intersection` here, I got `TopologyException` errors and warnings about `Self-intersection`. Adding calls to `st_make_valid` where you get these errors seems [to fix the issues](https://github.com/r-spatial/sf/issues/347).
+
+```{r}
+forest_zones <- c(
+    "Zone de verdure"
+    ,"Zone naturelle ou forestière"
+)
+
+forests_geneva <-
+  zones %>%
+   filter(LIBFVG %in% forest_zones) %>%
+   ms_simplify(keep=0.005) %>%
+   st_make_valid() %>%
+   st_intersection(st_union(st_combine(communes_no_water_simplified)))
+
+ggplot() +
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_no_water_simplified, color=NA) +
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons for forests, fill grey, no border +
+  geom_sf(data=forests_geneva, fill="darkgreen", alpha=0.2, color=NA)+
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_no_water_simplified, fill=NA) +
+  labs(title="Geneva communes, buildings and forests")
+```
+
+If we got carried away, we could even add the agricultural fields to the map.
+
+```{r}
+fields_geneva <-
+  zones %>%
+   filter(LIBFVG == "Zone agricole ou viticole") %>%
+   ms_simplify(keep=0.005) %>%
+   st_make_valid() %>%
+   st_intersection(st_union(st_combine(communes_no_water_simplified)))
+
+ggplot() +
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_no_water_simplified, color=NA) +
+  # Add polygons for forests, fill green, no border +
+  geom_sf(data=forests_geneva, fill="darkgreen", alpha=0.2, color=NA)+
+  # Add polygons for agricultural area
+  geom_sf(data=fields_geneva, fill="yellow", alpha=0.1, color=NA)+
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_no_water_simplified, fill=NA) +
+  labs(title="Geneva communes, buildings, forests and fields")
+```
+
+## Adding lake and rivers back
+
+What if we decided to add waters back?
+
+```{r}
+ggplot() +
+  # Add lake and rivers
+  geom_sf(data=waters, fill="blue", color=NA) + 
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_no_water_simplified, color=NA) +
+  # Add polygons for forests, fill green, no border +
+  geom_sf(data=forests_geneva, fill="darkgreen", alpha=0.2, color=NA)+
+  # Add polygons for agricultural area
+  geom_sf(data=fields_geneva, fill="yellow", alpha=0.1, color=NA)+
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_no_water_simplified, fill=NA) +
+  labs(title="Geneva communes, buildings, forests and fields",
+       subtitle="Water is misaligned...")
+```
+
+Unfortunately, our water borders cannot match our simplified communes map. Even if we apply exactly the same `ms_simplify`, it won't do the trick.
+
+```{r}
+waters_simplified <-
+  waters %>%
+  ms_simplify(keep_shapes=T, keep=0.02)
+
+ggplot() +
+  # Add lake and rivers
+  geom_sf(data=waters_simplified, fill="blue", color=NA) + 
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_no_water_simplified, color=NA) +
+  # Add polygons for forests, fill green, no border +
+  geom_sf(data=forests_geneva, fill="darkgreen", alpha=0.2, color=NA)+
+  # Add polygons for agricultural area
+  geom_sf(data=fields_geneva, fill="yellow", alpha=0.1, color=NA)+
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_no_water_simplified, fill=NA) +
+  labs(title="Geneva communes, buildings, forests and fields",
+       subtitle="Water, even simplified, is still misaligned...")
+```
+
+The solution is to merge communes and water into the same `sf` object before applying `ms_simplify`.
+
+```{r}
+communes_and_water <- 
+  communes %>%
+  # remove waters from the original communes
+  st_difference(st_union(st_combine(waters))) %>%
+  # apply the same columns names so that we
+  # can bind waters and communes sf objects
+  rename(NOM=COMMUNE) %>%
+  select(NOM, SHAPE_AREA, SHAPE_LEN) %>%
+  # add the waters polygons
+  rbind(waters) %>%
+  # simplify
+  ms_simplify(keep=0.01) %>%
+  st_make_valid()
+
+ggplot() +
+  geom_sf(data=communes_and_water) +
+  labs(title="Communes and waters in the same sf",
+       subtitle="Simplifed together at 0.01")
+```
+
+Now that borders are aligned, we can split `communes` and `water` again. This makes cropping other `sf` objects on communes, as well as applying different fill color much easier.
+
+```{r}
+communes_simplified <- 
+  communes_and_water %>%
+  filter(!(NOM %in% waters$NOM))
+
+waters_simplified <- 
+  communes_and_water %>%
+  filter(NOM %in% waters$NOM)
+
+buildings_geneva <-
+  zones %>%
+   filter(LIBFVG %in% building_zones) %>%
+   ms_simplify(keep=0.005) %>%
+   st_make_valid() %>%
+   st_intersection(st_union(st_combine(communes_simplified)))
+
+forests_geneva <-
+  zones %>%
+   filter(LIBFVG %in% forest_zones) %>%
+   ms_simplify(keep=0.005) %>%
+   st_make_valid() %>%
+   st_intersection(st_union(st_combine(communes_simplified)))
+
+fields_geneva <-
+  zones %>%
+   filter(LIBFVG == "Zone agricole ou viticole") %>%
+   ms_simplify(keep=0.005) %>%
+   st_make_valid() %>%
+   st_intersection(st_union(st_combine(communes_simplified)))
+
+ggplot() +
+  # Add lake and rivers
+  geom_sf(data=waters_simplified, fill="lightblue", color=NA) + 
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_simplified) +
+  # Add polygons for forests, fill green, no border +
+  geom_sf(data=forests_geneva, fill="darkgreen", alpha=0.2, color=NA)+
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="grey", color=NA) +
+  # Add polygons for agricultural area
+  geom_sf(data=fields_geneva, fill="yellow", alpha=0.1, color=NA)+
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_simplified, fill=NA) +
+  labs(title="Geneva communes, buildings and forests")
+```
+
+## Some more styling
+
+A few final tweaks:
+- add a caption to mention the source of the data
+- add fill and border for smoother borders (I see some jagged lines in ubuntu)
+- apply the `ipsum` theme from `hrbrthemes`
+
+```{r}
+library(hrbrthemes)
+
+ggplot() +
+  # Add lake and rivers
+  geom_sf(data=waters_simplified, fill="lightblue", color="lightblue") + 
+  # Add polygons for communes, default fill, no border
+  geom_sf(data=communes_simplified) +
+  # Add polygons for forests, fill green, no border +
+  geom_sf(data=forests_geneva, fill="lightgreen", color="lightgreen") +
+   # Add polygons for agricultural area
+  geom_sf(data=fields_geneva, fill="lightyellow", color="lightyellow") +
+  # Add polygons for buildings, fill grey, no border
+  geom_sf(data=buildings_geneva, fill="lightgrey", color="lightgrey") +
+  # Add polygons borders for communes, no fill, default border
+  geom_sf(data=communes_simplified, fill=NA, size=0.5, color="darkgrey") +
+  labs(title="Geneva Land Use",
+       subtitle="showing communes, buildings, forests and fields",
+       caption="Datasets from http://ge.ch/sitg/.") +
+  theme_ipsum()
+```
+
+## Some more ressources
+
+- [Geocomputation with R](http://robinlovelace.net/geocompr/)
+- [Spatial data and the tidyverse](http://robinlovelace.net/presentations/spatial-tidyverse.html#1)
+- [GeoSpatial Data Visualization in R](https://bhaskarvk.github.io/user2017.geodataviz/?utm_content=buffer7427d&utm_medium=social&utm_source=twitter.com&utm_campaign=buffer)
+- [Tidy storm trajectories](http://r-spatial.org/r/2017/08/28/nest.html)
