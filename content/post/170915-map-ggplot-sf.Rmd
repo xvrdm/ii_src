@@ -445,9 +445,10 @@ ggplot() +
 ## Some more styling
 
 A few final tweaks:
+
 - add a caption to mention the source of the data
 - add fill and border for smoother borders (I see some jagged lines in ubuntu)
-- apply the `ipsum` theme from `hrbrthemes`
+- apply the `ipsum` theme from Bob Rudis [`hrbrthemes`](https://github.com/hrbrmstr/hrbrthemes)
 
 ```{r}
 library(hrbrthemes)
