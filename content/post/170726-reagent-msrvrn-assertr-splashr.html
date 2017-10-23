@@ -1,7 +1,7 @@
 ---
 title: "Scraping javascript generated content with splashr"
 author: "Xavier Adam"
-date: "2017-07-26"
+date: 2017-07-26
 categories: ["R"]
 tags: ["R","RMarkdown","rvest","xml2","purrr","dplyr","scraping","splashr","harbor","javascript"]
 ---
@@ -26,6 +26,7 @@ tags: ["R","RMarkdown","rvest","xml2","purrr","dplyr","scraping","splashr","harb
 <img src="/img/1707261-scrsh-count-msrvrn.png" alt="Count of offers can be found on the page." />
 <p class="caption">Count of offers can be found on the page.</p>
 </div>
+<p>Please keep in mind that I took the screenshot when I originally published the post and reran the code multiple times since. So the final scraped number might not match the screenshot.</p>
 <p>Inspect the html of the page to find the id/class of the number of results and store it in a variable. We can complete the code as below:</p>
 <pre class="r"><code># Load needed packages
 suppressMessages(library(xml2))
@@ -76,7 +77,8 @@ devtools::install_github(&quot;hrbrmstr/splashr&quot;)</code></pre>
 <li>Let RStudio know that you want python commands to be run in this virtualenv</li>
 </ol>
 <pre class="r"><code># Use the path where you installed the docker venv
-reticulate::use_virtualenv(&quot;~/dev/virtualenvs/docker&quot;, required=T)</code></pre>
+library(reticulate)
+use_virtualenv(&quot;~/.virtualenv/docker&quot;, required=T)</code></pre>
 <p>The very first time we run <code>splashr</code>, it might be a bit slow: it will have to download the docker image (the template used to create container) that has <code>Splash</code> installed in it. The image is documented <a href="https://hub.docker.com/r/hrbrmstr/splashttpd/">here</a>.</p>
 <pre class="r"><code>suppressMessages(library(splashr))
 install_splash()</code></pre>
@@ -93,11 +95,11 @@ count &lt;- listing_html_js %&gt;%
   html_node(&quot;#count-search&quot;) %&gt;%
   html_text()
 print(paste(&quot;count value is:&quot;, count))</code></pre>
-<pre><code>## [1] &quot;count value is: (32 results)&quot;</code></pre>
+<pre><code>## [1] &quot;count value is: (21 results)&quot;</code></pre>
 <p>The number is extracted with a little regular expression and the <code>stringr</code> package:</p>
 <pre class="r"><code>offer_number &lt;- stringr::str_extract(count, &quot;[0-9]+&quot;) 
 print(paste(&quot;offer_number value is:&quot;, offer_number))</code></pre>
-<pre><code>## [1] &quot;offer_number value is: 32&quot;</code></pre>
+<pre><code>## [1] &quot;offer_number value is: 21&quot;</code></pre>
 <p>Don’t forget to stop and delete your container.</p>
 <pre class="r"><code>stop_splash(splash_container)</code></pre>
 <p>We now have the expected number of offers, which we can use to verify our final dataset (read <a href="https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/">previous post</a> to see how).</p>

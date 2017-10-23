@@ -1,7 +1,7 @@
 ---
 title: "Scraping javascript generated content with splashr"
 author: "Xavier Adam"
-date: "2017-07-26"
+date: 2017-07-26
 categories: ["R"]
 tags: ["R","RMarkdown","rvest","xml2","purrr","dplyr","scraping","splashr","harbor","javascript"]
 ---
@@ -19,6 +19,8 @@ Even when they don't load all the results, the websites nearly always indicate t
 Using [our previous example](https://xvrdm.github.io/2017/03/31/scrape-a-list-of-rental-offers-using-rvest-and-purrr/), we can see that the number of matched offers is written on the page.
 
 ![Count of offers can be found on the page.](/img/1707261-scrsh-count-msrvrn.png)
+
+Please keep in mind that I took the screenshot when I originally published the post and reran the code multiple times since. So the final scraped number might not match the screenshot. 
 
 Inspect the html of the page to find the id/class of the number of results and store it in a variable. We can complete the code as below:
 
@@ -72,7 +74,8 @@ devtools::install_github("hrbrmstr/splashr")
 
 ```{r}
 # Use the path where you installed the docker venv
-reticulate::use_virtualenv("~/dev/virtualenvs/docker", required=T)
+library(reticulate)
+use_virtualenv("~/.virtualenv/docker", required=T)
 ```
 
 The very first time we run `splashr`, it might be a bit slow: it will have to download the docker image (the template used to create container) that has `Splash` installed in it. The image is documented [here](https://hub.docker.com/r/hrbrmstr/splashttpd/).

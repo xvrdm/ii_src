@@ -1,0 +1,339 @@
+---
+title: "Socialize your blogdown"
+author: "Xavier Adam"
+date: 2017-10-23
+twitterImg: /img/socialize-blogdown-social.png
+description: "Modify your blogdown template to support Twitter cards."
+categories: ["R"]
+tags: ["R","RMarkdown","twitter"]
+---
+
+## TL;DR
+
+In this post, we show how to modify the default bookdown template so that rich cards are generated when links are shared on Twitter. We also try to learn a bit of Blogdown/Hugo templating along the way.
+
+![](/img/socialize-blogdown-social.png)
+
+## Tags and Twitter Tags
+
+Social `<meta>` tags are `HTML` tags at the top of your pages that social network and search engine can parse to extract content and generate rich previews.
+
+When the [R Weekly twitter account](https://twitter.com/rweekly_live) share a link pointing to a site without tags for Twitter cards, it looks like a plain url.
+
+![](/img/20171023-socialize-blogdown-plain-tweet.png)
+
+However, when they share a link pointing to a site with compatible meta tags, like [Bob Rudis's]() blog, it doesn't look like a plain url, but rather like this:
+
+![](/img/20171023-socialize-blogdown-rich-tweet.png)
+
+The two big families of social graph meta tags are [Twitter's `name=twitter:<tag-name>`](https://developer.twitter.com/en/docs/tweets/optimize-with-cards/guides/getting-started) and [Facebook Open Graph's `property=og:<tag-name>`](http://ogp.me/). Luckily, when Twitter doesn't find a tag, it can use the corresponding Open Graph tag in some cases, so we don't need to define everything twice (see ["Twitter Cards and Open Graph" here]((https://developer.twitter.com/en/docs/tweets/optimize-with-cards/guides/getting-started)). 
+
+If we look at the tags used in the example above, we see that a mix of `og:` and `twitter:` tags were used.
+
+![](/img/20171023-socialize-blogdown-source-rudis.png)
+
+1. `og:image`: link to the image
+2. `og:description`: short description text
+3. `og:url`: actual reference url
+4. `og:title`: title for the page
+5. `twitter:card`: type of the card
+
+## Social graph tags and blogdown
+### Vanilla blogdown
+
+This site is generated using the excellent [Yihui Xie's](https://github.com/yihui/) [blogdown](https://github.com/rstudio/blogdown) package. It also use the default theme, a [fork](https://github.com/yihui/hugo-lithium-theme) of [Jonathan Rutheiser's](https://github.com/jrutheiser) [lithium-theme](https://github.com/jrutheiser/hugo-lithium-theme) for [Hugo](https://gohugo.io/).
+
+The theme doesn't fully implement the `<meta>` tags necessary for creating cards on twitter. To see what tags are currently generated, we can check the template file `head.html` in `themes/hugo-lithium-theme/layouts/partials/`.
+
+```{html}
+...
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+{{ end }}
+
+{{ if eq .URL "/" }}
+<meta property="description" content="{{ .Site.Params.description }}">
+{{ else }}
+  {{ if .Description }}
+  <meta property="description" content="{{ .Description }}">
+  {{ end }}
+{{ end }}
+...
+```
+
+In addition to normal HTML, the template uses Hugo templating syntax elements to get dynamic html output (everything between double curly brackets):
+
+1. [Hugo variables](https://gohugo.io/variables/) to gather data about the site and the post, or to create your own reusable variables. There are different types of variables:
+
+- variables starting with `.` are defined in the top metadata of the page
+- variables starting with `.Site` are defined in the `config.toml` file
+- variables starting with `$` are defined in the template
+
+I don't enough about the details but it looks like the most common variable like `Title` and `Description` have "shortcuts" (i.e you access them simply with `.Title`/`.Site.Title` and `.Description`), whereas other variable need `.Params`.
+
+```{html}
+<!-- insert the title of the site between a <title> tag -->
+<title>{{ .Site.Title }}</title>
+
+<!-- insert the title of the post between a <title> tag -->
+<title>{{ .Title }}</title>
+
+<!-- insert the title stored in variable mytitle -->
+{{ $defaultTitle := "This is a title" }}
+<title>{{ $defaultTitle }}</title>
+```
+
+2. [if/else conditional](https://gohugo.io/templates/introduction/#conditionals) to add different tags depending on a condition.
+
+```{html}
+<!-- if the relative url of the page is "/", insert title "coconut" -->
+{{ if eq .URL "/" }}
+  <title>coconut</title>
+{{ end }}
+
+<!-- if there is a "description" metadata on the post, insert it -->
+<!-- in a "description" meta tag, otherwise insert default text -->
+{{ if .Description }}
+  <meta property="description" content="{{ .Description }}">
+{{ else }}
+  <meta property="description" content="Default description">
+{{ end }}
+```
+
+Let's deconstruct the Hugo templating syntax. I'll keep it brief so, if it doesn't make sense, [read this introduction](https://bookdown.org/yihui/blogdown/templates.html#a-minimal-example).
+
+If the page is the homepage (`{{ if eq .URL "/" }}`):
+
+```{html}
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+{{ else }}
+...
+{{ end }}
+
+{{ if eq .URL "/" }}
+<meta property="description" content="{{ .Site.Params.description }}">
+{{ else }}
+...
+{{ end }}
+```
+
+1. Add a `og:title` tag with the name of site (`.Site.Title` refers to the `title` key in `config.toml`)
+2. Add a `og:type` tag of type "website".
+3. Add a `description` tag with the description of the site (`.Site.Params.description` refers to the `description` key from the `params` section defined in `config.toml`)
+
+If the page is not the homepage:
+
+```{html}
+{{ if eq .URL "/" }}
+...
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+{{ end }}
+
+{{ if eq .URL "/" }}
+...
+{{ else }}
+  {{ if .Description }}
+  <meta property="description" content="{{ .Description }}">
+  {{ end }}
+{{ end }}
+```
+
+1. Add a `og:title` tag with the name of the post (`.Title` refers to the `title` key at the top of the post) and the name of the site (`.Site.Title` refers to the `title` key in `config.toml`)
+2. Only if a `description` key is defined on the post, add it as `description` key.
+
+### Adding tags
+
+We do have `og:title`. We want to add: 
+
+- `og:description`: support for description, the current `description` tag isn't pulled as `og:description`.
+- `twitter:creator` and `twitter:site`: twitter handles of the site/author
+- `twitter:card` and `og:image`: the type of twitter card and image address
+
+#### Post description with `og:description`
+
+In the current template, a `description` tag is already added. Note that if there is no description for the post, no `description` tag is added. 
+
+We want (1) to add logic for `og:description` tag and (2) to add a default description for when no description was written for the post. 
+
+##### Add logic for `og:description`
+
+Rather than using the `{{ if eq .URL "/" }}` twice we will wrap everything in the first `if` statement.
+
+```{html}
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+<meta property="description" content="{{ .Site.Params.description }}">
+<meta property="og:description" content="{{ .Site.Params.description }}">
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+<meta property="og:type" content="article">
+<meta property="description" content="{{ .Description }}">
+<meta property="og:description" content="{{ .Description }}">
+{{ end }}
+```
+
+##### Add default for `og:description`
+
+What happen if the post has no description? We could write an `if` statement to check first if there is a `description` key (`{{ if .Description }}...`), but we can also provide a [`default`](https://gohugo.io/functions/default/), which goes like `{{ variable-name | default default-value }}`. To avoid writing the `default-value` twice (for tags `description` and `og:description`), we can store it in a [Go template variable](https://golang.org/pkg/text/template/#hdr-Variables).
+
+Below we create the `$defaultDescription` variable, defined as a string "Article posted by <author-name>, on <nicely-formated-date>". Then we add it as default for the tags `og:description` and `description`.
+
+```{html}
+{{ $defaultDescription := printf "Article posted by %s, on %s" .Params.author (.Date.Format "Monday, January 2nd, 2006") }}
+<meta property="description" content="{{ .Description | default $defaultDescription }}">
+<meta property="og:description" content="{{ .Description | default $defaultDescription }}">
+```
+
+and in context:
+
+```{html}
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+<meta property="description" content="{{ .Site.Params.description }}">
+<meta property="og:description" content="{{ .Site.Params.description }}">
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+<meta property="og:type" content="article">
+  
+{{ $defaultDescription := printf "Article posted by %s, on %s" .Params.author (.Date.Format "Monday, January 2nd, 2006") }}
+<meta property="description" content="{{ .Description | default $defaultDescription }}">
+<meta property="og:description" content="{{ .Description | default $defaultDescription }}">
+{{ end }}
+```
+
+#### Twitter creator and site
+
+We could make twitter creator and site dependent of posts metadata if multiple authors were writing on your site. In this case, I just added two keys `twitterAuthor` and `twitterSite` into the `params` section of `config.toml` and used this for all posts (i.e outside of the if/else homepage conditional).
+
+```{toml}
+# in config.toml
+[params]
+    description = "A datascience journal."
+    twitterAuthor = "@xvrdm"
+    twitterSite = "@invalid_input"
+```
+
+and in the template: 
+
+```{html}
+<meta name="twitter:creator" content="{{ .Site.Params.twitterAuthor }}">
+<meta name="twitter:site" content="{{ .Site.Params.twitterSite }}">
+```
+
+and in context:
+
+```{html}
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+<meta property="description" content="{{ .Site.Params.description }}">
+<meta property="og:description" content="{{ .Site.Params.description }}">
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+<meta property="og:type" content="article">
+  
+{{ $defaultDescription := printf "Article posted by %s, on %s" .Params.author (.Date.Format "Monday, January 2nd, 2006") }}
+<meta property="description" content="{{ .Description | default $defaultDescription }}">
+<meta property="og:description" content="{{ .Description | default $defaultDescription }}">
+{{ end }}
+
+<meta name="twitter:creator" content="{{ .Site.Params.twitterAuthor }}">
+<meta name="twitter:site" content="{{ .Site.Params.twitterSite }}">
+```
+
+#### Twitter card type with `twitter:card`
+
+Three scenarios:
+
+- If the page is the homepage, we want to have a simple `summary` card (small image) with the site logo as image.
+- If the page is a post and has no image specified in its metadata, again a simple `summary` card with the site logo as image.
+- If the page is a post and has an image specified in its metadata, then let's do a `summary_large_image` card (image should be on a size ratio 2x1).
+
+In the default template, the site logo is located in `https://<site-url>/images` with a name defined in `config.toml` (see the `params.logo` section) and accessible via `.Site.params.logo.url` variable.
+
+For images, I place them all in a dir called `img` in `static`. So I refer them in posts with `/img/myimagefile.jpg`. At the top of the post, I can add a metadata key named `twitterImg` and then refer to it in the template with `.Params.twitterImg`. 
+
+
+A post metadata could look like this:
+
+```{yaml}
+title: "Create maps from SITG files with sf and ggplot2"
+author: "Xavier Adam"
+date: 2017-09-15
+twitterImg: /img/map-ggplot-sf-social.png
+description: "Learn to create maps with sf and ggplot2, starting from SHAPE files."
+categories: ["R"]
+tags: ["R","RMarkdown","map", "shape", "sf", "ggplot2", "rmapshaper"]
+```
+
+The template syntax would be something like:
+
+```{html}
+{{ if eq .URL "/" }}
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="http://xvrdm.github.io/images/{{ .Site.Params.logo.url }}" >
+{{ else }}
+  {{ if .Params.twitterImg }}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="http://xvrdm.github.io/{{ .Params.twitterImg }}" >
+  {{ else }}
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:image" content="http://xvrdm.github.io/images/{{ .Site.Params.logo.url }}" >
+{{ end }}
+```
+
+and the final template:
+
+```{html}
+{{ if eq .URL "/" }}
+<title>{{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Site.Title }}">
+<meta property="og:type" content="website">
+<meta property="description" content="{{ .Site.Params.description }}">
+<meta property="og:description" content="{{ .Site.Params.description }}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xvrdm.github.io/images/{{ .Site.Params.logo.url }}" >
+{{ else }}
+<title>{{ .Title }}{{ with .Params.subtitle }} - {{ . }} {{ end }} - {{ .Site.Title }}</title>
+<meta property="og:title" content="{{ .Title }} - {{ .Site.Title }}">
+<meta property="og:type" content="article">
+
+  {{ if .Params.twitterImg }}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="http://xvrdm.github.io/{{ .Params.twitterImg }}" >
+  {{ else }}
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="http://xvrdm.github.io/images/{{ .Site.Params.logo.url }}" >
+  {{ end }}
+  
+{{ $defaultDescription := printf "Article posted by %s, on %s" .Params.author (.Date.Format "Monday, January 2nd, 2006") }}
+<meta property="description" content="{{ .Description | default $defaultDescription }}">
+<meta property="og:description" content="{{ .Description | default $defaultDescription }}">
+{{ end }}
+
+<meta name="twitter:creator" content="{{ .Params.twitterAuthor }}">
+<meta name="twitter:site" content="{{ .Params.twitterSite }}">
+```
+
+Using the [card validator](https://cards-dev.twitter.com/validator), you can try your new cards:
+
+![](/img/20171023-socialize-blogdown-cardval-1.png)
+![](/img/20171023-socialize-blogdown-cardval-2.png)

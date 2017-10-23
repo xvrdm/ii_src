@@ -1,7 +1,7 @@
 ---
 title: "Testing Flask SQLAlchemy database with pytest"
 author: "Xavier Adam"
-date: "2017-07-03"
+date: 2017-07-03
 categories: ["python"]
 tags: ["python", "flask", "pytest", "flask-sqlalchemy"]
 ---

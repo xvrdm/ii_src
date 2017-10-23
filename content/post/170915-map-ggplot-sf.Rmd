@@ -1,10 +1,16 @@
 ---
 title: "Create maps from SITG files with sf and ggplot2"
 author: "Xavier Adam"
-date: "2017-09-15"
+date: 2017-09-15
+twitterImg: /img/map-ggplot-sf-social.png
+description: "Learn to create maps with sf and ggplot2, starting from SHAPE files."
 categories: ["R"]
 tags: ["R","RMarkdown","map", "shape", "sf", "ggplot2", "rmapshaper"]
 ---
+## TL;DR
+
+In this post, we see how to create a map in R using the `sf` and `ggplot2` package, starting from freely available SHAPE files. 
+
 ## Introduction
 
 In Geneva (Switzerland), we are lucky to have [SITG](http://ge.ch/sitg/sitg_catalog/sitg_donnees?keyword&distribution=3&datatype=tous&topic=tous&service=tous), a website with tons of geographical open datasets. I wanted to try my hand at doing maps in R for some time now, but could not find a way that felt integrated with the other packages I usually work with. Importing [`.sh`](https://en.wikipedia.org/wiki/Shapefile) files was a challenge (for me), as well as plotting the data in [`ggplot2`](http://ggplot2.tidyverse.org/) rather than with a dedicated map library like [`tmap`](https://cran.r-project.org/web/packages/tmap/vignettes/tmap-nutshell.html).

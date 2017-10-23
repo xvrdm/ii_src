@@ -17,14 +17,21 @@ publishDir = "../xvrdm.github.io"
 [[menu.main]]
     name = "GitHub"
     url = "https://github.com/xvrdm"
+[[menu.main]]
+    name = "Twitter"
+    url = "https://twitter.com/xvrdm"
+    weight = 5
 
 [params]
     description = "A datascience journal."
+    twitterAuthor = "@xvrdm"
+    twitterSite = "@invalid_input"
+    socialImgDir = "https://xvrdm.github.io/img/"
 
     # options for highlight.js (version, additional languages, and theme)
     highlightjsVersion = "9.11.0"
     highlightjsCDN = "//cdn.bootcss.com"
-    highlightjsLang = ["r", "yaml"]
+    highlightjsLang = ["r", "yaml", "clojure", "hy", "python"]
     highlightjsTheme = "github"
 
     MathJaxCDN = "//cdn.bootcss.com"

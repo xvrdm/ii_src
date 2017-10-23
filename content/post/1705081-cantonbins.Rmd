@@ -1,9 +1,10 @@
 ---
 title: "Create Swiss cantons cartogram with ggplot2"
 author: "Xavier Adam"
-date: "2017-05-08"
+date: 2017-05-08
 categories: ["R"]
 tags: ["R","R Markdown","rvest","xml2","purrr","dplyr","scraping"]
+twitterImg: "img/1705081-cantonbins-scrsh-hrbrmstr-statesbin.png"
 ---    
 
 ## Introduction

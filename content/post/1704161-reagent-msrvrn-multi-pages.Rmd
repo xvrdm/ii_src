@@ -1,7 +1,7 @@
 ---
 title: "Scrape linked webpages using rvest and purrr"
 author: "Xavier Adam"
-date: "2017-04-16"
+date: 2017-04-16
 categories: ["R"]
 tags: ["R","RMarkdown","rvest","xml2","purrr","dplyr","scraping"]
 ---    
